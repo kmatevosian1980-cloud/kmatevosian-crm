@@ -154,7 +154,7 @@ if check_password():
                 if st.button("🚀 Начать загрузку в облако"):
                     if uploaded_file:
                         file_path = f"{sel_id}/{uploaded_file.name}"
-                        supabase.storage.from_("furniture_files").upload(file_path, uploaded_file.getvalue(), {"upsert": "true"})
+                        supabase.storage.from_("FURNITURE_FILES").upload(file_path, uploaded_file.getvalue(), {"upsert": "true"})
                         st.success("Файл успешно сохранен в карточке!")
 
     # --- 4. АНАЛИТИКА (Доступна только админу) ---
