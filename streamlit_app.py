@@ -119,3 +119,62 @@ if check_password():
                         u_name = st.text_input("ФИО", value=order['client_name'])
                         u_phone = st.text_input("Телефон", value=order.get('phone', ''))
                         u_address = st.text_area("Адрес", value=order.get('address', ''))
+                    with c2:
+                        u_status = st.selectbox("Статус", 
+                            ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"],
+                            index=["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"].index(order['status']))
+                        u_price = st.number_input("Сумма", value=float(order['total_price']))
+                        u_paid = st.number_input("Оплачено", value=float(order['paid_amount']))
+                        st.warning(f"Остаток: {u_price - u_paid} руб.")
+                    
+                    if st.form_submit_button("💾 Сохранить изменения"):
+                        supabase.table("orders").update({
+                            "client_name": u_name, "phone": u_phone, "address": u_address,
+                            "status": u_status, "total_price": u_price, "paid_amount": u_paid
+                        }).eq("id", sel_id).execute()
+                        st.success("Данные обновлены!")
+                        st.rerun()
+
+            with tab2:
+                st.write("### 📎 Загрузка новых документов")
+                uploaded_file = st.file_uploader("Выберите файл (Проект, фото)", type=['png', 'jpg', 'pdf'])
+                if st.button("🚀 Начать загрузку"):
+                    if uploaded_file:
+                        file_path = f"{sel_id}/{uploaded_file.name}"
+                        # Используем название бакета заглавными буквами, как в вашем Supabase
+                        supabase.storage.from_("FURNITURE_FILES").upload(file_path, uploaded_file.getvalue(), {"upsert": "true"})
+                        st.success(f"Файл {uploaded_file.name} загружен!")
+                        st.rerun()
+
+                st.write("---")
+                st.write("### 📂 Прикрепленные файлы:")
+                try:
+                    # Поиск файлов в папке, названной по ID заказа
+                    files_list = supabase.storage.from_("FURNITURE_FILES").list(str(sel_id))
+                    if files_list:
+                        for f in files_list:
+                            if f['name'] != '.emptyFolderPlaceholder':
+                                col_f1, col_f2 = st.columns([4, 1])
+                                file_url = supabase.storage.from_("FURNITURE_FILES").get_public_url(f"{sel_id}/{f['name']}")
+                                col_f1.write(f"📄 {f['name']}")
+                                col_f2.markdown(f"[Открыть]({file_url})")
+                    else:
+                        st.info("Файлов пока нет.")
+                except Exception:
+                    st.info("Папка еще не создана (загрузите первый файл).")
+
+    # --- 4. АНАЛИТИКА ---
+    elif choice == "Аналитика" and st.session_state.role == "admin":
+        st.subheader("📊 Финансовый отчет")
+        resp = supabase.table("orders").select("*").execute()
+        if resp.data:
+            df_an = pd.DataFrame(resp.data)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Оборот", f"{df_an['total_price'].sum():,.0f} р.")
+            c2.metric("Касса", f"{df_an['paid_amount'].sum():,.0f} р.")
+            c3.metric("В долгах", f"{(df_an['total_price'] - df_an['paid_amount']).sum():,.0f} р.")
+            st.bar_chart(df_an['status'].value_counts())
+
+    if st.sidebar.button("🚪 Выйти"):
+        st.session_state.auth = False
+        st.rerun()
