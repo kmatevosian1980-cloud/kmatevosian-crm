@@ -18,7 +18,7 @@ def check_password():
         st.session_state.role = None
 
     if not st.session_state.auth:
-        st.title("🔐 Вход в систему BS Kitchen")
+        st.title("🔐 Вход в систему БиС Kitchen")
         user_type = st.selectbox("Выберите пользователя", ["Администратор", "Дизайнер/Замерщик"])
         pwd = st.text_input("Введите пароль", type="password")
         
