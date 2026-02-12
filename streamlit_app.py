@@ -144,13 +144,21 @@ if check_password():
             ]
 
             # Вывод таблицы
-            edited_df = st.data_editor(
-                display_df,
-                use_container_width=True,
-                hide_index=True,
-                disabled=True,
-                key="orders_editor",
-                selection_mode="single-row"
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.write("### Выберите заказ для открытия")
+
+            selected_id = st.radio(
+                "",
+                display_df["ID"],
+                format_func=lambda x: f"#{x} — {display_df[display_df['ID']==x]['Клиент'].values[0]}"
+            )
+
+            if selected_id:
+                st.session_state.selected_order_id = selected_id
+                choice = "Карточка проекта"
+
             )
             selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
 
