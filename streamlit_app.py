@@ -155,7 +155,7 @@ if check_password():
                         for f in files_list:
                             if f['name'] != '.emptyFolderPlaceholder':
                                 col_f1, col_f2 = st.columns([4, 1])
-                                file_url = supabase.storage.from_("FURNITURE_FILES").get_public_url(f"{sel_id}/{f['name']}")
+                                file_url = supabase.storage.from_("furniture_files").get_public_url(f"{sel_id}/{f['name']}")
                                 col_f1.write(f"📄 {f['name']}")
                                 col_f2.markdown(f"[Открыть]({file_url})")
                     else:
