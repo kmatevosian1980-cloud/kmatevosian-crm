@@ -159,7 +159,7 @@ if check_password():
                 st.session_state.selected_order_id = selected_id
                 choice = "Карточка проекта"
 
-            )
+            
             selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
 
             if "orders_editor" in st.session_state:
