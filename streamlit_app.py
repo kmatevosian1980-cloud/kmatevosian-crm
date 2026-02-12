@@ -144,8 +144,8 @@ if check_password():
                 "Сумма", "Оплачено", "Долг", "Комментарий"
             ]
 
-            # Вывод таблицы
-            edited_df = st.data_editor(
+# Вывод таблицы
+edited_df = st.data_editor(
     display_df,
     use_container_width=True,
     hide_index=True,
@@ -163,13 +163,12 @@ if selected_rows:
     st.session_state.open_card = True
     st.rerun()
 
-            
-            # Итоговая плашка
-            st.caption(
-                f"Отображено заказов: {len(display_df)} | "
-                f"Общая сумма: {df['total_price'].sum():,.0f} ₽ | "
-                f"К получению: {(df['total_price'] - df['paid_amount']).sum():,.0f} ₽"
-            )
+# Итоговая плашка
+st.caption(
+    f"Отображено заказов: {len(display_df)} | "
+    f"Общая сумма: {df['total_price'].sum():,.0f} ₽ | "
+    f"К получению: {(df['total_price'] - df['paid_amount']).sum():,.0f} ₽"
+)
         else:
             st.info("Заказов пока нет.")
     # ======================================================
