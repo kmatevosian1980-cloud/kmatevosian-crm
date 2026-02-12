@@ -14,7 +14,7 @@ BUCKET_NAME = "furniture_files"
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
 # ==============================
-# 🎨 ГЛОБАЛЬНЫЙ СТИЛЬ
+# 🎨 СТИЛЬ
 # ==============================
 st.markdown("""
 <style>
@@ -39,39 +39,8 @@ st.markdown("""
     height: 45px;
     font-weight: 600;
 }
-
-h1, h2, h3 { font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
-
-# ==============================
-# 🟢 СТАТУС БЕЙДЖ
-# ==============================
-def status_badge(status):
-    colors = {
-        "Лид": "#9e9e9e",
-        "Замер": "#2196f3",
-        "Проект": "#9c27b0",
-        "Договор/Аванс": "#673ab7",
-        "Производство": "#ff9800",
-        "Монтаж": "#03a9f4",
-        "Завершено": "#4caf50"
-    }
-    color = colors.get(status, "#9e9e9e")
-
-    return f"""
-    <div style="
-        display:inline-block;
-        padding:6px 14px;
-        border-radius:20px;
-        background-color:{color};
-        color:white;
-        font-weight:600;
-        font-size:14px;
-    ">
-        {status}
-    </div>
-    """
 
 # ==============================
 # 🔐 АВТОРИЗАЦИЯ
@@ -97,9 +66,9 @@ def check_password():
                 st.rerun()
             else:
                 st.error("Неверный пароль")
-
         return False
     return True
+
 
 # ==============================
 # 🚀 ОСНОВНОЙ ИНТЕРФЕЙС
@@ -128,16 +97,14 @@ if check_password():
         if resp.data:
             df = pd.DataFrame(resp.data)
 
-            # Ответственный
             df["Ответственный"] = df["users"].apply(
                 lambda x: x["full_name"] if isinstance(x, dict) else ""
             )
 
-            # Остаток
-            df["Остаток долга"] = df["total_price"] - df["paid_amount"]
+            df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            # 🔎 Поиск + фильтр
-            col1, col2 = st.columns([2,1])
+            # 🔎 Поиск и фильтр
+            col1, col2 = st.columns([2, 1])
             search = col1.text_input("🔎 Поиск клиента")
             status_filter = col2.selectbox(
                 "Фильтр по статусу",
@@ -150,23 +117,40 @@ if check_password():
             if status_filter != "Все":
                 df = df[df["status"] == status_filter]
 
-            # Цветной статус
-            df["Статус"] = df["status"].apply(lambda x: status_badge(x))
+            # Emoji статусы
+            status_icons = {
+                "Лид": "⚪",
+                "Замер": "🔵",
+                "Проект": "🟣",
+                "Договор/Аванс": "🟪",
+                "Производство": "🟠",
+                "Монтаж": "🔷",
+                "Завершено": "🟢"
+            }
+
+            df["Статус"] = df["status"].apply(
+                lambda x: f"{status_icons.get(x, '⚪')} {x}"
+            )
 
             display_df = df[[
-                "id", "client_name", "Статус",
-                "Ответственный", "total_price", "Остаток долга"
+                "id",
+                "client_name",
+                "Статус",
+                "Ответственный",
+                "total_price",
+                "Остаток"
             ]]
 
             display_df.columns = [
-                "ID", "Клиент", "Статус",
-                "Ответственный", "Общая сумма", "Остаток"
+                "ID",
+                "Клиент",
+                "Статус",
+                "Ответственный",
+                "Общая сумма",
+                "Остаток"
             ]
 
-            st.markdown(
-                display_df.to_html(escape=False, index=False),
-                unsafe_allow_html=True
-            )
+            st.dataframe(display_df, use_container_width=True)
 
             st.caption(
                 f"Всего заказов: {len(display_df)} | "
@@ -236,17 +220,13 @@ if check_password():
                 .select("*, users(full_name)") \
                 .eq("id", sel_id).single().execute().data
 
-            # Заголовок
-            colA, colB = st.columns([3,1])
-            colA.markdown(f"### {order['client_name']}")
-            colB.markdown(status_badge(order["status"]), unsafe_allow_html=True)
-
-            st.divider()
-
-            # 💰 KPI
+            # KPI
             total = float(order.get("total_price", 0))
             paid = float(order.get("paid_amount", 0))
             debt = total - paid
+
+            st.markdown(f"### {order['client_name']}")
+            st.divider()
 
             c1, c2, c3 = st.columns(3)
             c1.metric("Общая сумма", f"{total:,.0f} ₽")
@@ -255,7 +235,6 @@ if check_password():
 
             st.divider()
 
-            # Редактирование
             users_resp = supabase.table("users").select("*").execute()
             users_list = users_resp.data if users_resp.data else []
             user_dict = {u["full_name"]: u["id"] for u in users_list}
