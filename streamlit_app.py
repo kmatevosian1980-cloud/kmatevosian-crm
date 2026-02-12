@@ -103,7 +103,6 @@ if check_password():
 
             df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            # 🔎 Поиск и фильтр
             col1, col2 = st.columns([2, 1])
             search = col1.text_input("🔎 Поиск клиента")
             status_filter = col2.selectbox(
@@ -117,7 +116,6 @@ if check_password():
             if status_filter != "Все":
                 df = df[df["status"] == status_filter]
 
-            # Emoji статусы
             status_icons = {
                 "Лид": "⚪",
                 "Замер": "🔵",
@@ -220,7 +218,6 @@ if check_password():
                 .select("*, users(full_name)") \
                 .eq("id", sel_id).single().execute().data
 
-            # KPI
             total = float(order.get("total_price", 0))
             paid = float(order.get("paid_amount", 0))
             debt = total - paid
@@ -235,43 +232,41 @@ if check_password():
 
             st.divider()
 
-            users_resp = supabase.table("users").select("*").execute()
-            users_list = users_resp.data if users_resp.data else []
-            user_dict = {u["full_name"]: u["id"] for u in users_list}
+            # ===============================
+            # ✏ РЕДАКТИРОВАНИЕ ФИНАНСОВ
+            # ===============================
+            st.markdown("### ✏ Редактирование финансов")
 
-            with st.form("edit_form"):
+            with st.form("finance_edit_form"):
 
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    u_phone = st.text_input("Телефон", value=order.get("phone", ""))
-                    u_address = st.text_area("Адрес", value=order.get("address", ""))
-
-                with col2:
-                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                    u_status = st.selectbox("Статус", statuses,
-                                            index=statuses.index(order.get("status")))
-
-                    u_responsible_name = st.selectbox(
-                        "Ответственный",
-                        list(user_dict.keys())
+                    new_total = st.number_input(
+                        "Общая сумма",
+                        value=total,
+                        min_value=0.0,
+                        format="%.2f"
                     )
 
-                u_comment = st.text_area("Комментарий",
-                                         value=order.get("comment", ""))
+                with col2:
+                    new_paid = st.number_input(
+                        "Оплачено",
+                        value=paid,
+                        min_value=0.0,
+                        format="%.2f"
+                    )
 
-                submitted = st.form_submit_button("💾 Сохранить изменения")
+                submit_finance = st.form_submit_button("Сохранить изменения")
 
-                if submitted:
+                if submit_finance:
+
                     supabase.table("orders").update({
-                        "phone": u_phone,
-                        "address": u_address,
-                        "status": u_status,
-                        "responsible_id": user_dict[u_responsible_name],
-                        "comment": u_comment
+                        "total_price": new_total,
+                        "paid_amount": new_paid
                     }).eq("id", sel_id).execute()
 
-                    st.success("Обновлено!")
+                    st.success("Финансы обновлены")
                     st.rerun()
 
     # ======================================================
