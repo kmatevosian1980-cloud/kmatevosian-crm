@@ -2,7 +2,9 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
-# --- ПОДКЛЮЧЕНИЕ ---
+# ==============================
+# 🔌 ПОДКЛЮЧЕНИЕ
+# ==============================
 url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
@@ -11,10 +13,69 @@ BUCKET_NAME = "furniture_files"
 
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
+# ==============================
+# 🎨 ГЛОБАЛЬНЫЙ СТИЛЬ
+# ==============================
+st.markdown("""
+<style>
+.block-container { padding-top: 1.5rem; }
 
-# =========================================================
+[data-testid="stForm"] {
+    background-color: #ffffff;
+    padding: 25px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+[data-testid="stMetric"] {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+
+.stButton > button {
+    border-radius: 10px;
+    height: 45px;
+    font-weight: 600;
+}
+
+h1, h2, h3 { font-weight: 700; }
+</style>
+""", unsafe_allow_html=True)
+
+# ==============================
+# 🟢 СТАТУС БЕЙДЖ
+# ==============================
+def status_badge(status):
+    colors = {
+        "Лид": "#9e9e9e",
+        "Замер": "#2196f3",
+        "Проект": "#9c27b0",
+        "Договор/Аванс": "#673ab7",
+        "Производство": "#ff9800",
+        "Монтаж": "#03a9f4",
+        "Завершено": "#4caf50"
+    }
+    color = colors.get(status, "#9e9e9e")
+
+    return f"""
+    <div style="
+        display:inline-block;
+        padding:6px 14px;
+        border-radius:20px;
+        background-color:{color};
+        color:white;
+        font-weight:600;
+        font-size:14px;
+    ">
+        {status}
+    </div>
+    """
+
+# ==============================
 # 🔐 АВТОРИЗАЦИЯ
-# =========================================================
+# ==============================
 def check_password():
     if "auth" not in st.session_state:
         st.session_state.auth = False
@@ -40,26 +101,24 @@ def check_password():
         return False
     return True
 
-
-# =========================================================
+# ==============================
 # 🚀 ОСНОВНОЙ ИНТЕРФЕЙС
-# =========================================================
+# ==============================
 if check_password():
 
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
-    menu = ["Список заказов", "Добавить заказ", "Карточка проекта (Редактор)"]
-
+    menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
     if st.session_state.role == "admin":
         menu.append("Аналитика")
 
     choice = st.sidebar.selectbox("Навигация", menu)
 
-    # =========================================================
+    # ======================================================
     # 📋 СПИСОК ЗАКАЗОВ
-    # =========================================================
+    # ======================================================
     if choice == "Список заказов":
 
-        st.subheader("📋 Все текущие проекты")
+        st.title("📋 Все текущие проекты")
 
         resp = supabase.table("orders") \
             .select("*, users(full_name)") \
@@ -69,231 +128,192 @@ if check_password():
         if resp.data:
             df = pd.DataFrame(resp.data)
 
-            df["Остаток"] = df["total_price"] - df["paid_amount"]
-
-            # Получаем имя ответственного
+            # Ответственный
             df["Ответственный"] = df["users"].apply(
                 lambda x: x["full_name"] if isinstance(x, dict) else ""
             )
 
-            columns_map = {
-                "id": "ID",
-                "client_name": "Клиент",
-                "phone": "Телефон",
-                "address": "Адрес",
-                "order_type": "Тип мебели",
-                "status": "Статус",
-                "Ответственный": "Ответственный",
-                "comment": "Комментарий",
-                "total_price": "Общая сумма",
-                "paid_amount": "Оплачено",
-                "Остаток": "Остаток долга",
-                "created_at": "Дата создания"
-            }
+            # Остаток
+            df["Остаток долга"] = df["total_price"] - df["paid_amount"]
 
-            df_renamed = df.rename(columns=columns_map)
+            # 🔎 Поиск + фильтр
+            col1, col2 = st.columns([2,1])
+            search = col1.text_input("🔎 Поиск клиента")
+            status_filter = col2.selectbox(
+                "Фильтр по статусу",
+                ["Все"] + list(df["status"].unique())
+            )
 
-            with st.expander("⚙️ Настроить вид таблицы"):
-                default_cols = ["ID", "Клиент", "Статус", "Ответственный", "Общая сумма", "Остаток долга"]
-                selected_cols = st.multiselect(
-                    "Отображать колонки:",
-                    options=list(columns_map.values()),
-                    default=default_cols
-                )
+            if search:
+                df = df[df["client_name"].str.contains(search, case=False, na=False)]
 
-            if selected_cols:
-                st.dataframe(df_renamed[selected_cols], use_container_width=True)
+            if status_filter != "Все":
+                df = df[df["status"] == status_filter]
 
-                if "Общая сумма" in selected_cols:
-                    st.caption(
-                        f"Всего заказов: {len(df_renamed)} | "
-                        f"Сумма: {df_renamed['Общая сумма'].sum():,.0f} р."
-                    )
+            # Цветной статус
+            df["Статус"] = df["status"].apply(lambda x: status_badge(x))
+
+            display_df = df[[
+                "id", "client_name", "Статус",
+                "Ответственный", "total_price", "Остаток долга"
+            ]]
+
+            display_df.columns = [
+                "ID", "Клиент", "Статус",
+                "Ответственный", "Общая сумма", "Остаток"
+            ]
+
+            st.markdown(
+                display_df.to_html(escape=False, index=False),
+                unsafe_allow_html=True
+            )
+
+            st.caption(
+                f"Всего заказов: {len(display_df)} | "
+                f"Сумма: {df['total_price'].sum():,.0f} ₽"
+            )
 
         else:
             st.info("Заказов пока нет.")
 
-    # =========================================================
+    # ======================================================
     # ➕ ДОБАВИТЬ ЗАКАЗ
-    # =========================================================
+    # ======================================================
     elif choice == "Добавить заказ":
 
-        st.subheader("🆕 Регистрация нового клиента")
+        st.title("🆕 Новый заказ")
 
         users_resp = supabase.table("users").select("*").execute()
         users_list = users_resp.data if users_resp.data else []
-        user_dict = {u["full_name"]: u["id"] for u in users_list}
 
-        with st.form("new_order_form"):
+        if not users_list:
+            st.warning("⚠ Добавьте сотрудников в таблицу users.")
+        else:
+            user_dict = {u["full_name"]: u["id"] for u in users_list}
 
-            name = st.text_input("ФИО Клиента")
-            phone = st.text_input("Телефон")
-            address = st.text_area("Адрес доставки")
-            o_type = st.selectbox("Тип мебели", ["Кухня", "Шкаф-купе", "Гардеробная", "Прихожая", "Другое"])
-            price = st.number_input("Общая сумма (план)", min_value=0)
+            with st.form("new_order_form"):
 
-            responsible_name = st.selectbox("Ответственный", list(user_dict.keys()))
-            responsible_id = user_dict[responsible_name]
+                name = st.text_input("ФИО Клиента")
+                phone = st.text_input("Телефон")
+                address = st.text_area("Адрес")
+                o_type = st.selectbox("Тип мебели", ["Кухня", "Шкаф", "Гардеробная", "Другое"])
+                price = st.number_input("Сумма", min_value=0)
 
-            if st.form_submit_button("Создать карточку"):
+                responsible_name = st.selectbox("Ответственный", list(user_dict.keys()))
+                submit = st.form_submit_button("Создать заказ")
 
-                new_data = {
-                    "client_name": name,
-                    "phone": phone,
-                    "address": address,
-                    "order_type": o_type,
-                    "total_price": price,
-                    "paid_amount": 0,
-                    "status": "Лид",
-                    "responsible_id": responsible_id,
-                    "comment": ""
-                }
+                if submit:
+                    supabase.table("orders").insert({
+                        "client_name": name,
+                        "phone": phone,
+                        "address": address,
+                        "order_type": o_type,
+                        "total_price": price,
+                        "paid_amount": 0,
+                        "status": "Лид",
+                        "responsible_id": user_dict[responsible_name],
+                        "comment": ""
+                    }).execute()
 
-                supabase.table("orders").insert(new_data).execute()
-                st.success("Заказ создан!")
-                st.rerun()
+                    st.success("Заказ создан!")
+                    st.rerun()
 
-    # =========================================================
+    # ======================================================
     # 📝 КАРТОЧКА ПРОЕКТА
-    # =========================================================
-    elif choice == "Карточка проекта (Редактор)":
+    # ======================================================
+    elif choice == "Карточка проекта":
 
-        st.subheader("🔍 Управление заказом")
+        st.title("🔎 Управление заказом")
 
         resp = supabase.table("orders").select("id, client_name").execute()
 
         if resp.data:
-
             order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
             selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
             sel_id = order_options[selected_order]
 
-            order = supabase.table("orders").select("*").eq("id", sel_id).single().execute().data
+            order = supabase.table("orders") \
+                .select("*, users(full_name)") \
+                .eq("id", sel_id).single().execute().data
 
-            tab1, tab2 = st.tabs(["📝 Информация", "📂 Файлы"])
+            # Заголовок
+            colA, colB = st.columns([3,1])
+            colA.markdown(f"### {order['client_name']}")
+            colB.markdown(status_badge(order["status"]), unsafe_allow_html=True)
 
-            # -----------------------
-            # Информация
-            # -----------------------
-            with tab1:
+            st.divider()
 
-                users_resp = supabase.table("users").select("*").execute()
-                users_list = users_resp.data if users_resp.data else []
-                user_dict = {u["full_name"]: u["id"] for u in users_list}
+            # 💰 KPI
+            total = float(order.get("total_price", 0))
+            paid = float(order.get("paid_amount", 0))
+            debt = total - paid
 
-                current_responsible_id = order.get("responsible_id")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Общая сумма", f"{total:,.0f} ₽")
+            c2.metric("Оплачено", f"{paid:,.0f} ₽")
+            c3.metric("Остаток", f"{debt:,.0f} ₽")
 
-                if current_responsible_id:
-                    current_user_name = next(
-                        (u["full_name"] for u in users_list if u["id"] == current_responsible_id),
-                        None
+            st.divider()
+
+            # Редактирование
+            users_resp = supabase.table("users").select("*").execute()
+            users_list = users_resp.data if users_resp.data else []
+            user_dict = {u["full_name"]: u["id"] for u in users_list}
+
+            with st.form("edit_form"):
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    u_phone = st.text_input("Телефон", value=order.get("phone", ""))
+                    u_address = st.text_area("Адрес", value=order.get("address", ""))
+
+                with col2:
+                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
+                    u_status = st.selectbox("Статус", statuses,
+                                            index=statuses.index(order.get("status")))
+
+                    u_responsible_name = st.selectbox(
+                        "Ответственный",
+                        list(user_dict.keys())
                     )
-                else:
-                    current_user_name = list(user_dict.keys())[0]
 
-                with st.form("edit_form"):
+                u_comment = st.text_area("Комментарий",
+                                         value=order.get("comment", ""))
 
-                    c1, c2 = st.columns(2)
+                submitted = st.form_submit_button("💾 Сохранить изменения")
 
-                    with c1:
-                        u_name = st.text_input("ФИО", value=order.get("client_name", ""))
-                        u_phone = st.text_input("Телефон", value=order.get("phone", ""))
-                        u_address = st.text_area("Адрес", value=order.get("address", ""))
+                if submitted:
+                    supabase.table("orders").update({
+                        "phone": u_phone,
+                        "address": u_address,
+                        "status": u_status,
+                        "responsible_id": user_dict[u_responsible_name],
+                        "comment": u_comment
+                    }).eq("id", sel_id).execute()
 
-                        u_responsible_name = st.selectbox(
-                            "Ответственный",
-                            options=list(user_dict.keys()),
-                            index=list(user_dict.keys()).index(current_user_name)
-                        )
+                    st.success("Обновлено!")
+                    st.rerun()
 
-                        u_responsible_id = user_dict[u_responsible_name]
-
-                    with c2:
-                        statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                        current_status = order.get("status", "Лид")
-                        u_status = st.selectbox("Статус", statuses, index=statuses.index(current_status))
-
-                        u_price = st.number_input("Сумма", value=float(order.get("total_price", 0)))
-                        u_paid = st.number_input("Оплачено", value=float(order.get("paid_amount", 0)))
-
-                        st.warning(f"Остаток: {u_price - u_paid} руб.")
-
-                    u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
-
-                    if st.form_submit_button("💾 Сохранить"):
-
-                        supabase.table("orders").update({
-                            "client_name": u_name,
-                            "phone": u_phone,
-                            "address": u_address,
-                            "responsible_id": u_responsible_id,
-                            "status": u_status,
-                            "total_price": u_price,
-                            "paid_amount": u_paid,
-                            "comment": u_comment
-                        }).eq("id", sel_id).execute()
-
-                        st.success("Обновлено!")
-                        st.rerun()
-
-            # -----------------------
-            # Файлы
-            # -----------------------
-            with tab2:
-
-                uploaded_file = st.file_uploader("Выберите файл", type=["png", "jpg", "pdf"])
-
-                if st.button("🚀 Загрузить"):
-                    if uploaded_file:
-                        file_path = f"{sel_id}/{uploaded_file.name}"
-
-                        supabase.storage.from_(BUCKET_NAME).upload(
-                            file_path,
-                            uploaded_file.getvalue(),
-                            {"upsert": "true"}
-                        )
-
-                        st.success("Файл загружен!")
-                        st.rerun()
-
-                st.write("### 📂 Файлы:")
-
-                try:
-                    files_list = supabase.storage.from_(BUCKET_NAME).list(str(sel_id))
-
-                    if files_list:
-                        for f in files_list:
-                            col1, col2 = st.columns([4, 1])
-                            file_url = supabase.storage.from_(BUCKET_NAME).get_public_url(
-                                f"{sel_id}/{f['name']}"
-                            )
-                            col1.write(f["name"])
-                            col2.markdown(f"[Открыть]({file_url})")
-                    else:
-                        st.info("Файлов пока нет.")
-
-                except Exception:
-                    st.info("Папка ещё не создана.")
-
-    # =========================================================
+    # ======================================================
     # 📊 АНАЛИТИКА
-    # =========================================================
+    # ======================================================
     elif choice == "Аналитика" and st.session_state.role == "admin":
 
-        st.subheader("📊 Финансовый отчет")
+        st.title("📊 Финансовый отчет")
 
         resp = supabase.table("orders").select("*").execute()
 
         if resp.data:
-            df_an = pd.DataFrame(resp.data)
+            df = pd.DataFrame(resp.data)
 
             c1, c2, c3 = st.columns(3)
+            c1.metric("Оборот", f"{df['total_price'].sum():,.0f} ₽")
+            c2.metric("Касса", f"{df['paid_amount'].sum():,.0f} ₽")
+            c3.metric("В долгах",
+                      f"{(df['total_price'] - df['paid_amount']).sum():,.0f} ₽")
 
-            c1.metric("Оборот", f"{df_an['total_price'].sum():,.0f} р.")
-            c2.metric("Касса", f"{df_an['paid_amount'].sum():,.0f} р.")
-            c3.metric("В долгах", f"{(df_an['total_price'] - df_an['paid_amount']).sum():,.0f} р.")
-
-            st.bar_chart(df_an["status"].value_counts())
+            st.bar_chart(df["status"].value_counts())
 
     if st.sidebar.button("🚪 Выйти"):
         st.session_state.auth = False
