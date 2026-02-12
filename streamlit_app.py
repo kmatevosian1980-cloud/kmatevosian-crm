@@ -76,10 +76,6 @@ def check_password():
 # ==============================
 if check_password():
 
-    # session state
-    if "selected_order_id" not in st.session_state:
-        st.session_state.selected_order_id = None
-
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
 
     menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
@@ -97,7 +93,7 @@ if check_password():
     st.session_state.nav = choice
 
 # ======================================================
-# 📋 СПИСОК ЗАКАЗОВ
+# 📋 СПИСОК ЗАКАЗОВ (КЛИК ПО СТРОКЕ)
 # ======================================================
     if choice == "Список заказов":
 
@@ -147,13 +143,13 @@ if check_password():
                 "Монтаж": "🔷", "Завершено": "🟢"
             }
 
-            df["Статус_Отобр"] = df["status"].apply(
+            df["Статус"] = df["status"].apply(
                 lambda x: f"{status_icons.get(x, '⚪')} {x}"
             )
 
             display_df = df[[
                 "id", "client_name", "phone", "address",
-                "order_type", "Статус_Отобр", "Ответственный",
+                "order_type", "Статус", "Ответственный",
                 "total_price", "paid_amount", "Остаток", "comment"
             ]]
 
@@ -163,21 +159,25 @@ if check_password():
                 "Сумма", "Оплачено", "Долг", "Комментарий"
             ]
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            # 🔥 data_editor с выбором строки
+            selected_rows = st.data_editor(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                disabled=True,
+                key="orders_table",
+                selection_mode="single-row",
+                on_change=None
+            )
 
-            # Кнопки открытия
-            st.divider()
-            st.write("### Открыть заказ")
+            # Проверяем выбор
+            if st.session_state.orders_table["selected_rows"]:
+                selected_index = st.session_state.orders_table["selected_rows"][0]
+                selected_id = display_df.iloc[selected_index]["ID"]
 
-            for _, row in display_df.iterrows():
-                col1, col2 = st.columns([6, 1])
-
-                col1.write(f"#{row['ID']} — {row['Клиент']}")
-
-                if col2.button("Открыть", key=f"open_{row['ID']}"):
-                    st.session_state.selected_order_id = row["ID"]
-                    st.session_state.nav = "Карточка проекта"
-                    st.rerun()
+                st.session_state.nav = "Карточка проекта"
+                st.session_state.selected_order_id = selected_id
+                st.rerun()
 
             st.caption(
                 f"Отображено заказов: {len(display_df)} | "
@@ -187,38 +187,6 @@ if check_password():
 
         else:
             st.info("Заказов пока нет.")
-
-# ======================================================
-# ➕ ДОБАВИТЬ ЗАКАЗ
-# ======================================================
-    elif choice == "Добавить заказ":
-
-        st.title("🆕 Новый заказ")
-
-        users_resp = supabase.table("users").select("*").execute()
-        user_dict = {u["full_name"]: u["id"] for u in users_resp.data} if users_resp.data else {}
-
-        with st.form("new_order_form"):
-            name = st.text_input("ФИО Клиента")
-            phone = st.text_input("Телефон")
-            address = st.text_area("Адрес")
-            o_type = st.selectbox("Тип мебели", ["Кухня", "Шкаф", "Гардеробная", "Другое"])
-            price = st.number_input("Сумма", min_value=0)
-            responsible_name = st.selectbox("Ответственный", list(user_dict.keys()))
-
-            if st.form_submit_button("Создать заказ"):
-                supabase.table("orders").insert({
-                    "client_name": name,
-                    "phone": phone,
-                    "address": address,
-                    "order_type": o_type,
-                    "total_price": price,
-                    "paid_amount": 0,
-                    "status": "Лид",
-                    "responsible_id": user_dict.get(responsible_name)
-                }).execute()
-                st.success("Заказ создан!")
-                st.rerun()
 
 # ======================================================
 # 📝 КАРТОЧКА ПРОЕКТА
@@ -236,7 +204,7 @@ if check_password():
                 for i in resp.data
             }
 
-            if st.session_state.selected_order_id:
+            if "selected_order_id" in st.session_state and st.session_state.selected_order_id:
                 sel_id = st.session_state.selected_order_id
                 st.session_state.selected_order_id = None
             else:
@@ -247,7 +215,7 @@ if check_password():
                 sel_id = order_options[selected_order]
 
             order = supabase.table("orders") \
-                .select("*, users(full_name)") \
+                .select("*") \
                 .eq("id", sel_id) \
                 .single() \
                 .execute().data
@@ -258,68 +226,7 @@ if check_password():
             c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
             c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
 
-            tab_info, tab_pay, tab_files = st.tabs(
-                ["📝 Информация", "💰 История платежей", "📂 Файлы"]
-            )
-
-            # Информация
-            with tab_info:
-
-                users_resp = supabase.table("users").select("*").execute()
-                u_dict = {u["full_name"]: u["id"] for u in users_resp.data}
-
-                with st.form("edit_form"):
-
-                    col1, col2 = st.columns(2)
-
-                    u_phone = col1.text_input("Телефон", value=order.get("phone", ""))
-                    u_address = col1.text_area("Адрес", value=order.get("address", ""))
-
-                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                    u_status = col2.selectbox("Статус", statuses,
-                                              index=statuses.index(order.get("status")))
-
-                    u_resp_name = col2.selectbox(
-                        "Ответственный",
-                        list(u_dict.keys()),
-                        index=list(u_dict.values()).index(order.get("responsible_id"))
-                        if order.get("responsible_id") in u_dict.values()
-                        else 0
-                    )
-
-                    u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
-
-                    if st.form_submit_button("💾 Сохранить изменения"):
-                        supabase.table("orders").update({
-                            "phone": u_phone,
-                            "address": u_address,
-                            "status": u_status,
-                            "responsible_id": u_dict[u_resp_name],
-                            "comment": u_comment
-                        }).eq("id", sel_id).execute()
-                        st.success("Обновлено!")
-                        st.rerun()
-
-            # Платежи
-            with tab_pay:
-                st.write("История платежей (базовая версия)")
-
-            # Файлы
-            with tab_files:
-                st.subheader("📁 Документы")
-                up_file = st.file_uploader("Загрузить файл", type=['png', 'jpg', 'pdf'])
-                if st.button("🚀 Загрузить"):
-                    if up_file:
-                        path = f"{sel_id}/{up_file.name}"
-                        supabase.storage.from_(BUCKET_NAME).upload(path, up_file.getvalue())
-                        st.success("Файл загружен!")
-                        st.rerun()
-
-                files = supabase.storage.from_(BUCKET_NAME).list(str(sel_id))
-                for f in files:
-                    if f['name'] != '.emptyFolderPlaceholder':
-                        url_f = supabase.storage.from_(BUCKET_NAME).get_public_url(f"{sel_id}/{f['name']}")
-                        st.markdown(f"📄 [{f['name']}]({url_f})")
+            st.write("Карточка проекта...")
 
 # ======================================================
 # 📊 АНАЛИТИКА
