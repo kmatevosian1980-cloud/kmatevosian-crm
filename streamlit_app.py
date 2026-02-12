@@ -103,7 +103,6 @@ if check_password():
 
             df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            # 🔎 Поиск и фильтр
             col1, col2 = st.columns([2, 1])
             search = col1.text_input("🔎 Поиск клиента")
             status_filter = col2.selectbox(
@@ -117,7 +116,6 @@ if check_password():
             if status_filter != "Все":
                 df = df[df["status"] == status_filter]
 
-            # Emoji статусы
             status_icons = {
                 "Лид": "⚪",
                 "Замер": "🔵",
@@ -220,7 +218,6 @@ if check_password():
                 .select("*, users(full_name)") \
                 .eq("id", sel_id).single().execute().data
 
-            # KPI
             total = float(order.get("total_price", 0))
             paid = float(order.get("paid_amount", 0))
             debt = total - paid
@@ -273,6 +270,47 @@ if check_password():
 
                     st.success("Обновлено!")
                     st.rerun()
+
+            # ===============================
+            # 💰 РЕДАКТИРОВАНИЕ ФИНАНСОВ
+            # ===============================
+            st.divider()
+            st.markdown("### 💰 Редактирование финансов")
+
+            with st.form("finance_edit_form"):
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    new_total = st.number_input(
+                        "Общая сумма",
+                        value=total,
+                        min_value=0.0,
+                        format="%.2f"
+                    )
+
+                with col2:
+                    new_paid = st.number_input(
+                        "Оплачено",
+                        value=paid,
+                        min_value=0.0,
+                        format="%.2f"
+                    )
+
+                submit_finance = st.form_submit_button("Сохранить финансы")
+
+                if submit_finance:
+
+                    if new_paid > new_total:
+                        st.error("Оплачено не может быть больше общей суммы")
+                    else:
+                        supabase.table("orders").update({
+                            "total_price": new_total,
+                            "paid_amount": new_paid
+                        }).eq("id", sel_id).execute()
+
+                        st.success("Финансы обновлены")
+                        st.rerun()
 
     # ======================================================
     # 📊 АНАЛИТИКА
