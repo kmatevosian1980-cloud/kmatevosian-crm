@@ -144,19 +144,24 @@ if check_password():
             ]
 
             # Вывод таблицы
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            st.divider()
-            st.write("### Быстрое открытие заказа")
+           edited_df = st.data_editor(
+               display_df,
+               use_container_width=True,
+               hide_index=True,
+               disabled=True,
+               key="orders_editor"
+           )
 
-            for _, row in display_df.iterrows():
-                col1_btn, col2_btn = st.columns([6, 1])
+           selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
 
-                col1_btn.write(f"#{row['ID']} — {row['Клиент']}")
+           if selected_rows:
+               selected_index = selected_rows[0]
+               selected_id = display_df.iloc[selected_index]["ID"]
 
-                if col2_btn.button("Открыть", key=f"open_{row['ID']}"):
-                    st.session_state.selected_order_id = row["ID"]
-                    st.session_state.go_to_card = True
-                    st.rerun()
+               st.session_state.selected_order_id = selected_id
+               st.session_state.go_to_card = True
+               st.rerun()
+
 
             # Итоговая плашка
             st.caption(
