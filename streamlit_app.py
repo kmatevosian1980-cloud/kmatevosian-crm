@@ -220,7 +220,7 @@ if check_password():
 
             with tab_info:
 
-            order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
+                order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
 
             # Метрики как в вашем дизайне
             c1, c2, c3 = st.columns(3)
