@@ -145,7 +145,19 @@ if check_password():
 
             # Вывод таблицы
             st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
+            st.divider()
+            st.write("### Быстрое открытие заказа")
+
+            for _, row in display_df.iterrows():
+                col1_btn, col2_btn = st.columns([6, 1])
+
+                col1_btn.write(f"#{row['ID']} — {row['Клиент']}")
+
+                if col2_btn.button("Открыть", key=f"open_{row['ID']}"):
+                    st.session_state.selected_order_id = row["ID"]
+                    st.session_state.go_to_card = True
+                    st.rerun()
+
             # Итоговая плашка
             st.caption(
                 f"Отображено заказов: {len(display_df)} | "
