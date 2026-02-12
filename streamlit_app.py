@@ -142,7 +142,7 @@ if check_password():
                     if uploaded_file:
                         file_path = f"{sel_id}/{uploaded_file.name}"
                         # Используем название бакета заглавными буквами, как в вашем Supabase
-                        supabase.storage.from_("furniture_filesS").upload(file_path, uploaded_file.getvalue(), {"upsert": "true"})
+                        supabase.storage.from_("furniture_files").upload(file_path, uploaded_file.getvalue(), {"upsert": "true"})
                         st.success(f"Файл {uploaded_file.name} загружен!")
                         st.rerun()
 
