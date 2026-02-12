@@ -103,7 +103,6 @@ if check_password():
 
             df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            # 🔎 Поиск и фильтр
             col1, col2 = st.columns([2, 1])
             search = col1.text_input("🔎 Поиск клиента")
             status_filter = col2.selectbox(
@@ -117,7 +116,6 @@ if check_password():
             if status_filter != "Все":
                 df = df[df["status"] == status_filter]
 
-            # Emoji статусы
             status_icons = {
                 "Лид": "⚪",
                 "Замер": "🔵",
@@ -132,30 +130,17 @@ if check_password():
                 lambda x: f"{status_icons.get(x, '⚪')} {x}"
             )
 
-            display_df = df[[
-                "id",
-                "client_name",
-                "Статус",
-                "Ответственный",
-                "total_price",
-                "Остаток"
-            ]]
+            display_df = df[
+                ["id", "client_name", "Статус",
+                 "Ответственный", "total_price", "Остаток"]
+            ]
 
             display_df.columns = [
-                "ID",
-                "Клиент",
-                "Статус",
-                "Ответственный",
-                "Общая сумма",
-                "Остаток"
+                "ID", "Клиент", "Статус",
+                "Ответственный", "Общая сумма", "Остаток"
             ]
 
             st.dataframe(display_df, use_container_width=True)
-
-            st.caption(
-                f"Всего заказов: {len(display_df)} | "
-                f"Сумма: {df['total_price'].sum():,.0f} ₽"
-            )
 
         else:
             st.info("Заказов пока нет.")
@@ -212,7 +197,11 @@ if check_password():
         resp = supabase.table("orders").select("id, client_name").execute()
 
         if resp.data:
-            order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
+            order_options = {
+                f"{i['client_name']} (ID:{i['id']})": i["id"]
+                for i in resp.data
+            }
+
             selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
             sel_id = order_options[selected_order]
 
@@ -220,7 +209,6 @@ if check_password():
                 .select("*, users(full_name)") \
                 .eq("id", sel_id).single().execute().data
 
-            # KPI
             total = float(order.get("total_price", 0))
             paid = float(order.get("paid_amount", 0))
             debt = total - paid
@@ -229,50 +217,54 @@ if check_password():
             st.divider()
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("Общая сумма", f"{total:,.0f} ₽")
+            c1.metric("Сумма договора", f"{total:,.0f} ₽")
             c2.metric("Оплачено", f"{paid:,.0f} ₽")
             c3.metric("Остаток", f"{debt:,.0f} ₽")
 
             st.divider()
 
-            users_resp = supabase.table("users").select("*").execute()
-            users_list = users_resp.data if users_resp.data else []
-            user_dict = {u["full_name"]: u["id"] for u in users_list}
+            # ✏ Изменить сумму договора
+            st.markdown("### ✏ Изменить сумму договора")
+            new_total = st.number_input("Новая сумма договора", value=total, min_value=0.0)
 
-            with st.form("edit_form"):
+            if st.button("Сохранить сумму договора"):
+                supabase.table("orders").update({
+                    "total_price": new_total
+                }).eq("id", sel_id).execute()
 
-                col1, col2 = st.columns(2)
+                st.success("Сумма договора обновлена")
+                st.rerun()
 
-                with col1:
-                    u_phone = st.text_input("Телефон", value=order.get("phone", ""))
-                    u_address = st.text_area("Адрес", value=order.get("address", ""))
+            st.divider()
 
-                with col2:
-                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                    u_status = st.selectbox("Статус", statuses,
-                                            index=statuses.index(order.get("status")))
+            # ➕ Внести оплату
+            st.markdown("### ➕ Внести оплату")
 
-                    u_responsible_name = st.selectbox(
-                        "Ответственный",
-                        list(user_dict.keys())
-                    )
+            col_pay1, col_pay2 = st.columns([2, 1])
 
-                u_comment = st.text_area("Комментарий",
-                                         value=order.get("comment", ""))
+            with col_pay1:
+                payment_amount = st.number_input(
+                    "Сумма доплаты",
+                    min_value=0.0,
+                    step=1000.0,
+                    format="%.2f"
+                )
 
-                submitted = st.form_submit_button("💾 Сохранить изменения")
+            with col_pay2:
+                if st.button("Добавить оплату"):
+                    if payment_amount > 0:
+                        new_paid = paid + payment_amount
 
-                if submitted:
-                    supabase.table("orders").update({
-                        "phone": u_phone,
-                        "address": u_address,
-                        "status": u_status,
-                        "responsible_id": user_dict[u_responsible_name],
-                        "comment": u_comment
-                    }).eq("id", sel_id).execute()
+                        supabase.table("orders").update({
+                            "paid_amount": new_paid
+                        }).eq("id", sel_id).execute()
 
-                    st.success("Обновлено!")
-                    st.rerun()
+                        st.success(f"Добавлена оплата {payment_amount:,.0f} ₽")
+                        st.rerun()
+                    else:
+                        st.warning("Введите сумму больше 0")
+
+            st.divider()
 
     # ======================================================
     # 📊 АНАЛИТИКА
@@ -289,8 +281,10 @@ if check_password():
             c1, c2, c3 = st.columns(3)
             c1.metric("Оборот", f"{df['total_price'].sum():,.0f} ₽")
             c2.metric("Касса", f"{df['paid_amount'].sum():,.0f} ₽")
-            c3.metric("В долгах",
-                      f"{(df['total_price'] - df['paid_amount']).sum():,.0f} ₽")
+            c3.metric(
+                "В долгах",
+                f"{(df['total_price'] - df['paid_amount']).sum():,.0f} ₽"
+            )
 
             st.bar_chart(df["status"].value_counts())
 
