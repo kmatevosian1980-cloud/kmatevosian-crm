@@ -223,42 +223,42 @@ if check_password():
                 order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
 
             # Метрики как в вашем дизайне
-           c1, c2, c3 = st.columns(3)
-           c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
-           c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
-           c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
+            c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
+            c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
 
-           # Вкладки
-           tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
+            # Вкладки
+            tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
 
-           # =========================
-           # TAB 1 — ИНФОРМАЦИЯ
-           # =========================
-           with tab_info:
-               users_resp = supabase.table("users").select("*").execute()
-               u_dict = {u["full_name"]: u["id"] for u in users_resp.data}
+            # =========================
+            # TAB 1 — ИНФОРМАЦИЯ
+            # =========================
+            with tab_info:
+                users_resp = supabase.table("users").select("*").execute()
+                u_dict = {u["full_name"]: u["id"] for u in users_resp.data}
 
-               with st.form("edit_form"):
-                   col1, col2 = st.columns(2)
+                with st.form("edit_form"):
+                    col1, col2 = st.columns(2)
 
-                   u_phone = col1.text_input("Телефон", value=order.get("phone", ""))
-                   u_address = col1.text_area("Адрес", value=order.get("address", ""))
+                    u_phone = col1.text_input("Телефон", value=order.get("phone", ""))
+                    u_address = col1.text_area("Адрес", value=order.get("address", ""))
 
-                   statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                   u_status = col2.selectbox(
-                       "Статус",
-                       statuses,
-                       index=statuses.index(order.get("status"))
-                   )
+                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
+                    u_status = col2.selectbox(
+                        "Статус",
+                        statuses,
+                        index=statuses.index(order.get("status"))
+                    )
 
-                   u_resp_name = col2.selectbox(
-                       "Ответственный",
-                        list(u_dict.keys()),
-                        index=list(u_dict.values()).index(order.get("responsible_id"))
-                        if order.get("responsible_id") in u_dict.values() else 0
-                   )
+                    u_resp_name = col2.selectbox(
+                        "Ответственный",
+                         list(u_dict.keys()),
+                         index=list(u_dict.values()).index(order.get("responsible_id"))
+                         if order.get("responsible_id") in u_dict.values() else 0
+                    )
 
-                   u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
+                    u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
 
                   if st.form_submit_button("💾 Сохранить изменения"):
                       supabase.table("orders").update({
