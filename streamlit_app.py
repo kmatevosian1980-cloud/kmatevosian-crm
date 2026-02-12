@@ -10,7 +10,7 @@ url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-BUCKET_NAME = "FURNITURE_FILES"
+BUCKET_NAME = "furniture_files"
 
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
@@ -214,7 +214,7 @@ if check_password():
                 if st.button("🚀 Загрузить"):
                     if up_file:
                         path = f"{sel_id}/{up_file.name}"
-                        supabase.storage.from_(BUCKET_NAME).upload(path, up_file.getvalue(), {"upsert": "true"})
+                        supabase.storage.from_(BUCKET_NAME).upload(path, up_file.getvalue())
                         st.success("Файл загружен!")
                         st.rerun()
                 
