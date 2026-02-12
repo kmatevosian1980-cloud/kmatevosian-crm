@@ -208,21 +208,85 @@ if check_password():
                     pay_df['Дата'] = pd.to_datetime(pay_df['payment_date']).dt.strftime('%d.%m.%Y %H:%M')
                     st.table(pay_df[['Дата', 'amount', 'comment']].rename(columns={'amount': 'Сумма', 'comment': 'Инфо'}))
 
-            with tab_files:
-                st.subheader("📁 Документы")
-                up_file = st.file_uploader("Загрузить файл", type=['png', 'jpg', 'pdf'])
-                if st.button("🚀 Загрузить"):
-                    if up_file:
-                        path = f"{sel_id}/{up_file.name}"
-                        supabase.storage.from_(BUCKET_NAME).upload(path, up_file.getvalue())
-                        st.success("Файл загружен!")
-                        st.rerun()
-                
-                files = supabase.storage.from_(BUCKET_NAME).list(str(sel_id))
-                for f in files:
-                    if f['name'] != '.emptyFolderPlaceholder':
-                        url_f = supabase.storage.from_(BUCKET_NAME).get_public_url(f"{sel_id}/{f['name']}")
-                        st.markdown(f"📄 [{f['name']}]({url_f})")
+           with tab_pay:
+
+    st.subheader("💰 Добавить оплату")
+
+    # ===============================
+    # Получаем все платежи заказа
+    # ===============================
+    pay_resp = supabase.table("payments") \
+        .select("*") \
+        .eq("order_id", sel_id) \
+        .order("payment_date", desc=True) \
+        .execute()
+
+    payments = pay_resp.data if pay_resp.data else []
+
+    # Автопересчёт оплачено
+    total_paid = sum([float(p["amount"]) for p in payments])
+
+    # Синхронизация orders.paid_amount
+    if float(order["paid_amount"]) != total_paid:
+        supabase.table("orders").update({
+            "paid_amount": total_paid
+        }).eq("id", sel_id).execute()
+        order["paid_amount"] = total_paid
+
+    # ===============================
+    # Форма добавления платежа
+    # ===============================
+    with st.form("finance_form"):
+
+        col1, col2 = st.columns(2)
+
+        new_pay = col1.number_input("Сумма (₽)", min_value=0.0)
+        new_comm = col2.text_input("Комментарий")
+
+        if st.form_submit_button("✅ Зафиксировать платёж"):
+
+            if new_pay <= 0:
+                st.warning("Введите сумму платежа")
+            elif total_paid + new_pay > float(order["total_price"]):
+                st.error("❌ Переплата запрещена")
+            else:
+                supabase.table("payments").insert({
+                    "order_id": sel_id,
+                    "amount": new_pay,
+                    "comment": new_comm,
+                    "payment_date": datetime.now().isoformat()
+                }).execute()
+
+                st.success("Платёж учтён")
+                st.rerun()
+
+    st.divider()
+    st.write("### 📜 История оплат")
+
+    # ===============================
+    # Таблица платежей + удаление
+    # ===============================
+    if payments:
+
+        for p in payments:
+
+            col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+
+            date_fmt = datetime.fromisoformat(p["payment_date"]).strftime("%d.%m.%Y %H:%M")
+
+            col1.write(date_fmt)
+            col2.write(f"{float(p['amount']):,.0f} ₽")
+            col3.write(p.get("comment", ""))
+
+            if col4.button("🗑", key=f"del_{p['id']}"):
+
+                supabase.table("payments").delete().eq("id", p["id"]).execute()
+
+                st.success("Платёж удалён")
+                st.rerun()
+
+    else:
+        st.info("Оплат пока нет")
 
     # ======================================================
     # 📊 АНАЛИТИКА
