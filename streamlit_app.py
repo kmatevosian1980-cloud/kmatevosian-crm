@@ -72,6 +72,12 @@ def check_password():
 
 if check_password():
 
+        if "selected_order_id" not in st.session_state:
+        st.session_state.selected_order_id = None
+
+    if "open_card" not in st.session_state:
+        st.session_state.open_card = False
+
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
     menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
     if st.session_state.role == "admin":
@@ -139,7 +145,24 @@ if check_password():
             ]
 
             # Вывод таблицы
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            edited_df = st.data_editor(
+    display_df,
+    use_container_width=True,
+    hide_index=True,
+    disabled=True,
+    key="orders_editor"
+)
+
+selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
+
+if selected_rows:
+    selected_index = selected_rows[0]
+    selected_id = display_df.iloc[selected_index]["ID"]
+
+    st.session_state.selected_order_id = selected_id
+    st.session_state.open_card = True
+    st.rerun()
+
             
             # Итоговая плашка
             st.caption(
@@ -183,8 +206,14 @@ if check_password():
 
         if resp.data:
             order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
-            selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
-            sel_id = order_options[selected_order]
+            if st.session_state.open_card and st.session_state.selected_order_id:
+    sel_id = st.session_state.selected_order_id
+    st.session_state.open_card = False
+    st.session_state.selected_order_id = None
+else:
+    selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
+    sel_id = order_options[selected_order]
+
 
             order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
 
