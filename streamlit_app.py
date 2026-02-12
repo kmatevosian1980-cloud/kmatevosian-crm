@@ -204,14 +204,6 @@ if check_password():
         resp = supabase.table("orders").select("id, client_name").execute()
 
         if resp.data:
-              # ======================================================
-    # 📝 КАРТОЧКА ПРОЕКТА
-    # ======================================================
-    elif choice == "Карточка проекта":
-        st.title("🔎 Управление заказом")
-        resp = supabase.table("orders").select("id, client_name").execute()
-
-        if resp.data:
             order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
             selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
             sel_id = order_options[selected_order]
