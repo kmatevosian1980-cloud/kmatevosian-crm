@@ -260,16 +260,16 @@ if check_password():
 
                     u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
 
-                  if st.form_submit_button("💾 Сохранить изменения"):
-                      supabase.table("orders").update({
-                          "phone": u_phone,
-                          "address": u_address,
-                          "status": u_status,
-                          "responsible_id": u_dict[u_resp_name],
-                          "comment": u_comment
-                  }).eq("id", sel_id).execute()
-                  st.success("Обновлено!")
-                  st.rerun()
+                    if st.form_submit_button("💾 Сохранить изменения"):
+                        supabase.table("orders").update({
+                            "phone": u_phone,
+                            "address": u_address,
+                            "status": u_status,
+                            "responsible_id": u_dict[u_resp_name],
+                            "comment": u_comment
+                    }).eq("id", sel_id).execute()
+                    st.success("Обновлено!")
+                    st.rerun()
 
             with tab_pay:
                 st.subheader("💰 Добавить оплату")
