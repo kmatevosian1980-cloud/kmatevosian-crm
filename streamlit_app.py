@@ -13,6 +13,7 @@ supabase: Client = create_client(url, key)
 BUCKET_NAME = "furniture_files"
 
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
+st.write("Streamlit version:", st.__version__)
 
 # ==============================
 # 🎨 ВАШ СТИЛЬ (Вернул обратно)
