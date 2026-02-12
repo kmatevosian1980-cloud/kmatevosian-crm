@@ -117,8 +117,13 @@ if check_password():
             # Вывод таблицы
             st.dataframe(display_df, use_container_width=True, hide_index=True)
             
-            st.caption(f"Отображено заказов: {len(display_df)} | Общая сумма: {df['Сумма'].sum():,.0f} ₽")
+            # ИСПРАВЛЕНО: обращаемся к оригинальному названию колонки 'total_price'
+            st.caption(
+                f"Отображено заказов: {len(display_df)} | "
+                f"Общая сумма: {df['total_price'].sum():,.0f} ₽"
+            )
 
+            # --- БЫСТРЫЙ ПЕРЕХОД В КАРТОЧКУ ---
             # --- БЫСТРЫЙ ПЕРЕХОД В КАРТОЧКУ ---
             st.write("---")
             if not df.empty:
