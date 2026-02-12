@@ -204,9 +204,29 @@ if check_password():
         resp = supabase.table("orders").select("id, client_name").execute()
 
         if resp.data:
+              # ======================================================
+    # 📝 КАРТОЧКА ПРОЕКТА
+    # ======================================================
+    elif choice == "Карточка проекта":
+        st.title("🔎 Управление заказом")
+        resp = supabase.table("orders").select("id, client_name").execute()
+
+        if resp.data:
             order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
             selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
             sel_id = order_options[selected_order]
+
+            order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
+
+            # Метрики как в вашем дизайне
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
+            c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
+            c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
+
+            tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
+
+            with tab_info:
 
             order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
 
