@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
+from datetime import datetime
 
 # ==============================
 # 🔌 ПОДКЛЮЧЕНИЕ
@@ -19,21 +20,18 @@ st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 st.markdown("""
 <style>
 .block-container { padding-top: 1.5rem; }
-
 [data-testid="stForm"] {
     background-color: #ffffff;
     padding: 25px;
     border-radius: 16px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.05);
 }
-
 [data-testid="stMetric"] {
     background-color: #ffffff;
     padding: 20px;
     border-radius: 16px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.05);
 }
-
 .stButton > button {
     border-radius: 10px;
     height: 45px;
@@ -89,19 +87,30 @@ if check_password():
 
         st.title("📋 Все текущие проекты")
 
-        resp = supabase.table("orders") \
+        orders_resp = supabase.table("orders") \
             .select("*, users(full_name)") \
             .order("id", desc=True) \
             .execute()
 
-        if resp.data:
-            df = pd.DataFrame(resp.data)
+        if orders_resp.data:
+            df = pd.DataFrame(orders_resp.data)
+
+            # --- считаем оплаты через payments ---
+            payments_resp = supabase.table("payments").select("*").execute()
+            payments_df = pd.DataFrame(payments_resp.data) if payments_resp.data else pd.DataFrame()
+
+            if not payments_df.empty:
+                paid_sum = payments_df.groupby("order_id")["amount"].sum().reset_index()
+                df = df.merge(paid_sum, how="left", left_on="id", right_on="order_id")
+                df["amount"] = df["amount"].fillna(0)
+            else:
+                df["amount"] = 0
+
+            df["Остаток"] = df["total_price"] - df["amount"]
 
             df["Ответственный"] = df["users"].apply(
                 lambda x: x["full_name"] if isinstance(x, dict) else ""
             )
-
-            df["Остаток"] = df["total_price"] - df["paid_amount"]
 
             # 🔎 Поиск и фильтр
             col1, col2 = st.columns([2, 1])
@@ -117,12 +126,10 @@ if check_password():
             if status_filter != "Все":
                 df = df[df["status"] == status_filter]
 
-            # Emoji статусы
             status_icons = {
                 "Лид": "⚪",
                 "Замер": "🔵",
                 "Проект": "🟣",
-                "Договор/Аванс": "🟪",
                 "Производство": "🟠",
                 "Монтаж": "🔷",
                 "Завершено": "🟢"
@@ -133,74 +140,21 @@ if check_password():
             )
 
             display_df = df[[
-                "id",
-                "client_name",
-                "Статус",
-                "Ответственный",
-                "total_price",
-                "Остаток"
+                "id", "client_name", "Статус",
+                "Ответственный", "total_price",
+                "amount", "Остаток"
             ]]
 
             display_df.columns = [
-                "ID",
-                "Клиент",
-                "Статус",
-                "Ответственный",
-                "Общая сумма",
-                "Остаток"
+                "ID", "Клиент", "Статус",
+                "Ответственный", "Сумма",
+                "Оплачено", "Остаток"
             ]
 
             st.dataframe(display_df, use_container_width=True)
 
-            st.caption(
-                f"Всего заказов: {len(display_df)} | "
-                f"Сумма: {df['total_price'].sum():,.0f} ₽"
-            )
-
         else:
             st.info("Заказов пока нет.")
-
-    # ======================================================
-    # ➕ ДОБАВИТЬ ЗАКАЗ
-    # ======================================================
-    elif choice == "Добавить заказ":
-
-        st.title("🆕 Новый заказ")
-
-        users_resp = supabase.table("users").select("*").execute()
-        users_list = users_resp.data if users_resp.data else []
-
-        if not users_list:
-            st.warning("⚠ Добавьте сотрудников в таблицу users.")
-        else:
-            user_dict = {u["full_name"]: u["id"] for u in users_list}
-
-            with st.form("new_order_form"):
-
-                name = st.text_input("ФИО Клиента")
-                phone = st.text_input("Телефон")
-                address = st.text_area("Адрес")
-                o_type = st.selectbox("Тип мебели", ["Кухня", "Шкаф", "Гардеробная", "Другое"])
-                price = st.number_input("Сумма", min_value=0)
-
-                responsible_name = st.selectbox("Ответственный", list(user_dict.keys()))
-                submit = st.form_submit_button("Создать заказ")
-
-                if submit:
-                    supabase.table("orders").insert({
-                        "client_name": name,
-                        "phone": phone,
-                        "address": address,
-                        "order_type": o_type,
-                        "total_price": price,
-                        "paid_amount": 0,
-                        "status": "Лид",
-                        "responsible_id": user_dict[responsible_name],
-                        "comment": ""
-                    }).execute()
-
-                    st.success("Заказ создан!")
-                    st.rerun()
 
     # ======================================================
     # 📝 КАРТОЧКА ПРОЕКТА
@@ -220,59 +174,66 @@ if check_password():
                 .select("*, users(full_name)") \
                 .eq("id", sel_id).single().execute().data
 
+            # --- Получаем оплаты ---
+            payments_resp = supabase.table("payments") \
+                .select("*") \
+                .eq("order_id", sel_id) \
+                .order("payment_date", desc=True) \
+                .execute()
+
+            payments = payments_resp.data if payments_resp.data else []
+
+            paid_total = sum(p["amount"] for p in payments)
+            total = float(order["total_price"])
+            debt = total - paid_total
+
             # KPI
-            total = float(order.get("total_price", 0))
-            paid = float(order.get("paid_amount", 0))
-            debt = total - paid
-
             st.markdown(f"### {order['client_name']}")
-            st.divider()
-
             c1, c2, c3 = st.columns(3)
-            c1.metric("Общая сумма", f"{total:,.0f} ₽")
-            c2.metric("Оплачено", f"{paid:,.0f} ₽")
+            c1.metric("Сумма договора", f"{total:,.0f} ₽")
+            c2.metric("Оплачено", f"{paid_total:,.0f} ₽")
             c3.metric("Остаток", f"{debt:,.0f} ₽")
 
             st.divider()
 
-            users_resp = supabase.table("users").select("*").execute()
-            users_list = users_resp.data if users_resp.data else []
-            user_dict = {u["full_name"]: u["id"] for u in users_list}
+            # ➕ Добавить оплату
+            st.markdown("## ➕ Добавить оплату")
 
-            with st.form("edit_form"):
+            with st.form("add_payment_form"):
+                amount = st.number_input("Сумма", min_value=0.0, step=1000.0)
+                payment_date = st.date_input("Дата оплаты", value=datetime.today())
+                comment = st.text_input("Комментарий")
 
-                col1, col2 = st.columns(2)
+                submitted = st.form_submit_button("Сохранить оплату")
 
-                with col1:
-                    u_phone = st.text_input("Телефон", value=order.get("phone", ""))
-                    u_address = st.text_area("Адрес", value=order.get("address", ""))
+                if submitted and amount > 0:
+                    supabase.table("payments").insert({
+                        "order_id": sel_id,
+                        "amount": amount,
+                        "payment_date": payment_date.isoformat(),
+                        "comment": comment
+                    }).execute()
 
-                with col2:
-                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                    u_status = st.selectbox("Статус", statuses,
-                                            index=statuses.index(order.get("status")))
-
-                    u_responsible_name = st.selectbox(
-                        "Ответственный",
-                        list(user_dict.keys())
-                    )
-
-                u_comment = st.text_area("Комментарий",
-                                         value=order.get("comment", ""))
-
-                submitted = st.form_submit_button("💾 Сохранить изменения")
-
-                if submitted:
-                    supabase.table("orders").update({
-                        "phone": u_phone,
-                        "address": u_address,
-                        "status": u_status,
-                        "responsible_id": user_dict[u_responsible_name],
-                        "comment": u_comment
-                    }).eq("id", sel_id).execute()
-
-                    st.success("Обновлено!")
+                    st.success("Оплата добавлена")
                     st.rerun()
+
+            st.divider()
+
+            # 📜 История оплат
+            st.markdown("## 📜 История оплат")
+
+            if payments:
+                payments_df = pd.DataFrame(payments)
+                payments_df["payment_date"] = pd.to_datetime(
+                    payments_df["payment_date"]
+                ).dt.strftime("%d.%m.%Y")
+
+                display = payments_df[["payment_date","amount","comment"]]
+                display.columns = ["Дата","Сумма","Комментарий"]
+
+                st.dataframe(display, use_container_width=True)
+            else:
+                st.info("Оплат пока нет.")
 
     # ======================================================
     # 📊 АНАЛИТИКА
@@ -281,18 +242,28 @@ if check_password():
 
         st.title("📊 Финансовый отчет")
 
-        resp = supabase.table("orders").select("*").execute()
+        orders_resp = supabase.table("orders").select("*").execute()
+        payments_resp = supabase.table("payments").select("*").execute()
 
-        if resp.data:
-            df = pd.DataFrame(resp.data)
+        if orders_resp.data:
+            orders_df = pd.DataFrame(orders_resp.data)
+            payments_df = pd.DataFrame(payments_resp.data) if payments_resp.data else pd.DataFrame()
+
+            total_revenue = orders_df["total_price"].sum()
+
+            if not payments_df.empty:
+                cash = payments_df["amount"].sum()
+            else:
+                cash = 0
+
+            debt = total_revenue - cash
 
             c1, c2, c3 = st.columns(3)
-            c1.metric("Оборот", f"{df['total_price'].sum():,.0f} ₽")
-            c2.metric("Касса", f"{df['paid_amount'].sum():,.0f} ₽")
-            c3.metric("В долгах",
-                      f"{(df['total_price'] - df['paid_amount']).sum():,.0f} ₽")
+            c1.metric("Оборот", f"{total_revenue:,.0f} ₽")
+            c2.metric("Касса", f"{cash:,.0f} ₽")
+            c3.metric("В долгах", f"{debt:,.0f} ₽")
 
-            st.bar_chart(df["status"].value_counts())
+            st.bar_chart(orders_df["status"].value_counts())
 
     if st.sidebar.button("🚪 Выйти"):
         st.session_state.auth = False
