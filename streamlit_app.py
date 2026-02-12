@@ -179,6 +179,14 @@ if check_password():
     # ======================================================
     elif choice == "Добавить заказ":
         st.title("🆕 Новый заказ")
+        if st.session_state.selected_order_id:
+            sel_id = st.session_state.selected_order_id
+        else:
+            resp = supabase.table("orders").select("id, client_name").execute()
+            order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
+            selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
+            sel_id = order_options[selected_order]
+
         users_resp = supabase.table("users").select("*").execute()
         user_dict = {u["full_name"]: u["id"] for u in users_resp.data} if users_resp.data else {}
 
