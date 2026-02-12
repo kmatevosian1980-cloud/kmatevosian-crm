@@ -154,14 +154,17 @@ if check_password():
             )
             selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
 
-            if selected_rows:
-                selected_index = selected_rows[0]
-                selected_id = display_df.iloc[selected_index]["ID"]
+            if "orders_editor" in st.session_state:
+                selected = st.session_state.orders_editor.get("selection", {})
+                rows = selected.get("rows", [])
 
-                st.session_state.selected_order_id = selected_id
-                st.session_state.go_to_card = True
-                st.rerun()
+                if rows:
+                    selected_index = rows[0]
+                    selected_id = display_df.iloc[selected_index]["ID"]
 
+                    st.session_state.selected_order_id = selected_id
+                    st.session_state.go_to_card = True
+                    st.rerun()
 
             # Итоговая плашка
             st.caption(
