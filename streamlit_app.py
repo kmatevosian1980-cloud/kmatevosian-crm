@@ -149,9 +149,9 @@ if check_password():
                 use_container_width=True,
                 hide_index=True,
                 disabled=True,
-                key="orders_editor"
+                key="orders_editor",
+                selection_mode="single-row"
             )
-
             selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
 
             if selected_rows:
