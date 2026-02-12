@@ -78,12 +78,12 @@ if check_password():
         if "open_card" not in st.session_state:
             st.session_state.open_card = False
 
-    st.sidebar.title(f"👤 {st.session_state.role.upper()}")
-    menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
-    if st.session_state.role == "admin":
-        menu.append("Аналитика")
-
-    choice = st.sidebar.selectbox("Навигация", menu)
+        st.sidebar.title(f"👤 {st.session_state.role.upper()}")
+        menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
+        if st.session_state.role == "admin":
+            menu.append("Аналитика")
+ 
+        choice = st.sidebar.selectbox("Навигация", menu)
 
 # ======================================================
     # 📋 СПИСОК ЗАКАЗОВ (Версия с фильтрами и всеми данными)
