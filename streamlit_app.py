@@ -144,23 +144,23 @@ if check_password():
             ]
 
             # Вывод таблицы
-           edited_df = st.data_editor(
-               display_df,
-               use_container_width=True,
-               hide_index=True,
-               disabled=True,
-               key="orders_editor"
-           )
+            edited_df = st.data_editor(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                disabled=True,
+                key="orders_editor"
+            )
 
-           selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
+            selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
 
-           if selected_rows:
-               selected_index = selected_rows[0]
-               selected_id = display_df.iloc[selected_index]["ID"]
+            if selected_rows:
+                selected_index = selected_rows[0]
+                selected_id = display_df.iloc[selected_index]["ID"]
 
-               st.session_state.selected_order_id = selected_id
-               st.session_state.go_to_card = True
-               st.rerun()
+                st.session_state.selected_order_id = selected_id
+                st.session_state.go_to_card = True
+                st.rerun()
 
 
             # Итоговая плашка
