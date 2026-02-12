@@ -150,7 +150,7 @@ if check_password():
                 st.write("### 📂 Прикрепленные файлы:")
                 try:
                     # Поиск файлов в папке, названной по ID заказа
-                    files_list = supabase.storage.from_("FURNITURE_FILES").list(str(sel_id))
+                    files_list = supabase.storage.from_("furniture_files").list(str(sel_id))
                     if files_list:
                         for f in files_list:
                             if f['name'] != '.emptyFolderPlaceholder':
