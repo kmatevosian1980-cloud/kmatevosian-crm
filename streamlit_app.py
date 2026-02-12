@@ -73,10 +73,10 @@ def check_password():
 if check_password():
 
         if "selected_order_id" not in st.session_state:
-        st.session_state.selected_order_id = None
+            st.session_state.selected_order_id = None
 
-    if "open_card" not in st.session_state:
-        st.session_state.open_card = False
+        if "open_card" not in st.session_state:
+            st.session_state.open_card = False
 
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
     menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
