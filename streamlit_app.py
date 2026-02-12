@@ -15,7 +15,7 @@ BUCKET_NAME = "furniture_files"
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
 # ==============================
-# 🎨 ВАШ СТИЛЬ
+# 🎨 СТИЛЬ
 # ==============================
 st.markdown("""
 <style>
@@ -71,6 +71,9 @@ def check_password():
     return True
 
 
+# ==============================
+# 🚀 ОСНОВНОЙ ИНТЕРФЕЙС
+# ==============================
 if check_password():
 
     if "selected_order_id" not in st.session_state:
@@ -82,27 +85,16 @@ if check_password():
     if st.session_state.role == "admin":
         menu.append("Аналитика")
 
-    if "nav" not in st.session_state:
-        st.session_state.nav = menu[0]
+    choice = st.sidebar.selectbox("Навигация", menu)
 
-    choice = st.sidebar.selectbox(
-        "Навигация",
-        menu,
-        index=menu.index(st.session_state.nav)
-    )
-    st.session_state.nav = choice
-
-# ======================================================
-# 📋 СПИСОК ЗАКАЗОВ (через data_editor)
-# ======================================================
+    # ======================================================
+    # 📋 СПИСОК ЗАКАЗОВ
+    # ======================================================
     if choice == "Список заказов":
 
         st.title("📋 Все текущие проекты")
 
-        resp = supabase.table("orders") \
-            .select("*, users(full_name)") \
-            .order("id", desc=True) \
-            .execute()
+        resp = supabase.table("orders").select("*, users(full_name)").order("id", desc=True).execute()
 
         if resp.data:
             df = pd.DataFrame(resp.data)
@@ -113,77 +105,47 @@ if check_password():
 
             df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            col1, col2, col3 = st.columns([2, 1, 1])
-
-            search = col1.text_input("🔎 Поиск по клиенту")
-
-            status_filter = col2.selectbox(
-                "Этап проекта",
-                ["Все"] + list(df["status"].unique())
-            )
-
-            responsible_filter = col3.selectbox(
-                "Сотрудник",
-                ["Все"] + list(df["Ответственный"].unique())
-            )
-
-            if search:
-                df = df[df["client_name"].str.contains(search, case=False, na=False)]
-
-            if status_filter != "Все":
-                df = df[df["status"] == status_filter]
-
-            if responsible_filter != "Все":
-                df = df[df["Ответственный"] == responsible_filter]
-
-            status_icons = {
-                "Лид": "⚪", "Замер": "🔵", "Проект": "🟣",
-                "Договор/Аванс": "🟪", "Производство": "🟠",
-                "Монтаж": "🔷", "Завершено": "🟢"
-            }
-
-            df["Статус"] = df["status"].apply(
-                lambda x: f"{status_icons.get(x, '⚪')} {x}"
-            )
-
             display_df = df[[
-                "id", "client_name", "phone", "address",
-                "order_type", "Статус", "Ответственный",
-                "total_price", "paid_amount", "Остаток", "comment"
+                "id",
+                "client_name",
+                "status",
+                "Ответственный",
+                "total_price",
+                "Остаток"
             ]]
 
             display_df.columns = [
-                "ID", "Клиент", "Телефон", "Адрес",
-                "Тип мебели", "Статус", "Ответственный",
-                "Сумма", "Оплачено", "Долг", "Комментарий"
+                "ID",
+                "Клиент",
+                "Статус",
+                "Ответственный",
+                "Сумма",
+                "Остаток"
             ]
 
-            # 🔥 ВАЖНО: добавляем колонку выбора
-            display_df.insert(0, "Открыть", False)
-
-            edited_df = st.data_editor(
+            edited = st.data_editor(
                 display_df,
                 use_container_width=True,
                 hide_index=True,
-                column_config={
-                    "Открыть": st.column_config.CheckboxColumn(required=False)
-                }
+                disabled=True,
+                key="orders_editor"
             )
 
-            selected_rows = edited_df[edited_df["Открыть"] == True]
+            selected = st.session_state["orders_editor"]["selected_rows"]
 
-            if not selected_rows.empty:
-                selected_id = selected_rows.iloc[0]["ID"]
+            if selected:
+                row_index = selected[0]
+                selected_id = display_df.iloc[row_index]["ID"]
                 st.session_state.selected_order_id = selected_id
-                st.session_state.nav = "Карточка проекта"
+                st.experimental_set_query_params(page="card")
                 st.rerun()
 
         else:
             st.info("Заказов пока нет.")
 
-# ======================================================
-# 📝 КАРТОЧКА ПРОЕКТА
-# ======================================================
+    # ======================================================
+    # 📝 КАРТОЧКА ПРОЕКТА
+    # ======================================================
     elif choice == "Карточка проекта":
 
         st.title("🔎 Управление заказом")
@@ -192,54 +154,56 @@ if check_password():
 
         if resp.data:
 
-            order_options = {
-                f"{i['client_name']} (ID:{i['id']})": i["id"]
-                for i in resp.data
-            }
+            order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
 
             if st.session_state.selected_order_id:
                 sel_id = st.session_state.selected_order_id
                 st.session_state.selected_order_id = None
             else:
-                selected_order = st.selectbox(
-                    "Выберите клиента",
-                    list(order_options.keys())
-                )
+                selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
                 sel_id = order_options[selected_order]
 
-            order = supabase.table("orders") \
-                .select("*, users(full_name)") \
-                .eq("id", sel_id) \
-                .single() \
-                .execute().data
+            order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
 
+            # KPI
             c1, c2, c3 = st.columns(3)
             c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
             c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
             c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
 
-            st.write("Карточка проекта полностью сохранена как в CRM 2.1")
+            tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
 
-# ======================================================
-# 📊 АНАЛИТИКА
-# ======================================================
-    elif choice == "Аналитика" and st.session_state.role == "admin":
+            with tab_info:
+                users_resp = supabase.table("users").select("*").execute()
+                u_dict = {u["full_name"]: u["id"] for u in users_resp.data}
 
-        st.title("📊 Финансовый отчет")
+                with st.form("edit_form"):
+                    col1, col2 = st.columns(2)
 
-        resp = supabase.table("orders").select("*").execute()
+                    u_phone = col1.text_input("Телефон", value=order.get("phone", ""))
+                    u_address = col1.text_area("Адрес", value=order.get("address", ""))
 
-        if resp.data:
-            df = pd.DataFrame(resp.data)
+                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
+                    u_status = col2.selectbox("Статус", statuses, index=statuses.index(order.get("status")))
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Оборот", f"{df['total_price'].sum():,.0f} ₽")
-            c2.metric("Касса", f"{df['paid_amount'].sum():,.0f} ₽")
-            c3.metric("В долгах",
-                      f"{(df['total_price'] - df['paid_amount']).sum():,.0f} ₽")
+                    u_resp_name = col2.selectbox(
+                        "Ответственный",
+                        list(u_dict.keys()),
+                        index=list(u_dict.values()).index(order.get("responsible_id"))
+                        if order.get("responsible_id") in u_dict.values()
+                        else 0
+                    )
 
-            st.bar_chart(df["status"].value_counts())
+                    u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
 
-    if st.sidebar.button("🚪 Выйти"):
-        st.session_state.auth = False
-        st.rerun()
+                    if st.form_submit_button("💾 Сохранить изменения"):
+                        supabase.table("orders").update({
+                            "phone": u_phone,
+                            "address": u_address,
+                            "status": u_status,
+                            "responsible_id": u_dict[u_resp_name],
+                            "comment": u_comment
+                        }).eq("id", sel_id).execute()
+
+                        st.success("Обновлено!")
+                        st.rerun()
