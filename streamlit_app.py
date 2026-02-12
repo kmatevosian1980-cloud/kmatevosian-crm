@@ -15,38 +15,30 @@ BUCKET_NAME = "furniture_files"
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
 # ==============================
-# 🎨 СТИЛЬ
+# 🎨 ВАШ СТИЛЬ (Вернул обратно)
 # ==============================
 st.markdown("""
 <style>
 .block-container { padding-top: 1.5rem; }
 
-.card {
-    background: white;
-    padding: 15px;
-    border-radius: 14px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-    margin-bottom: 12px;
-}
-
-.status-col {
-    background: #f7f9fc;
-    padding: 10px;
+[data-testid="stForm"] {
+    background-color: #ffffff;
+    padding: 25px;
     border-radius: 16px;
-    min-height: 500px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
 }
 
-.progress-bar {
-    height: 8px;
+[data-testid="stMetric"] {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+
+.stButton > button {
     border-radius: 10px;
-    background: #e5e7eb;
-    overflow: hidden;
-    margin-top: 6px;
-}
-
-.progress-fill {
-    height: 8px;
-    background: #4f46e5;
+    height: 45px;
+    font-weight: 600;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -78,153 +70,173 @@ def check_password():
         return False
     return True
 
-# ==============================
-# 🚀 ОСНОВНОЙ ИНТЕРФЕЙС
-# ==============================
 if check_password():
 
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
-    menu = ["Kanban-доска", "Список заказов", "Добавить заказ", "Карточка проекта"]
+    menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
     if st.session_state.role == "admin":
         menu.append("Аналитика")
 
     choice = st.sidebar.selectbox("Навигация", menu)
 
-    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-
     # ======================================================
-    # 🧱 KANBAN
+    # 📋 СПИСОК ЗАКАЗОВ
     # ======================================================
-    if choice == "Kanban-доска":
+    if choice == "Список заказов":
+        st.title("📋 Все текущие проекты")
 
-        st.title("🧱 Kanban-доска заказов")
-
-        resp = supabase.table("orders").select("*").execute()
+        resp = supabase.table("orders").select("*, users(full_name)").order("id", desc=True).execute()
 
         if resp.data:
             df = pd.DataFrame(resp.data)
+            df["Ответственный"] = df["users"].apply(lambda x: x["full_name"] if isinstance(x, dict) else "")
+            df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            cols = st.columns(len(statuses))
+            col1, col2 = st.columns([2, 1])
+            search = col1.text_input("🔎 Поиск клиента")
+            status_filter = col2.selectbox("Фильтр по статусу", ["Все"] + list(df["status"].unique()))
 
-            for i, status in enumerate(statuses):
-                with cols[i]:
-                    st.markdown(f"### {status}")
-                    st.markdown('<div class="status-col">', unsafe_allow_html=True)
+            if search:
+                df = df[df["client_name"].str.contains(search, case=False, na=False)]
+            if status_filter != "Все":
+                df = df[df["status"] == status_filter]
 
-                    status_df = df[df["status"] == status]
+            status_icons = {
+                "Лид": "⚪", "Замер": "🔵", "Проект": "🟣",
+                "Договор/Аванс": "🟪", "Производство": "🟠",
+                "Монтаж": "🔷", "Завершено": "🟢"
+            }
 
-                    for _, row in status_df.iterrows():
-                        progress = 0
-                        if row["total_price"] > 0:
-                            progress = int((row["paid_amount"] / row["total_price"]) * 100)
+            df["Статус_Отобр"] = df["status"].apply(lambda x: f"{status_icons.get(x, '⚪')} {x}")
 
-                        st.markdown('<div class="card">', unsafe_allow_html=True)
-                        st.markdown(f"**{row['client_name']}**")
-                        st.write(f"💰 {row['total_price']:,.0f} ₽")
-                        st.write(f"💳 {row['paid_amount']:,.0f} ₽")
+            display_df = df[["id", "client_name", "Статус_Отобр", "Ответственный", "total_price", "Остаток"]]
+            display_df.columns = ["ID", "Клиент", "Статус", "Ответственный", "Общая сумма", "Остаток"]
 
-                        st.markdown(f"""
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width:{progress}%"></div>
-                        </div>
-                        <small>{progress}% оплачено</small>
-                        """, unsafe_allow_html=True)
-
-                        if st.button("Открыть", key=f"open_{row['id']}"):
-                            st.session_state.open_order = row["id"]
-                            st.session_state.menu = "Карточка проекта"
-
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                    st.markdown('</div>', unsafe_allow_html=True)
+            st.dataframe(display_df, use_container_width=True)
+            st.caption(f"Всего заказов: {len(display_df)} | Сумма: {df['total_price'].sum():,.0f} ₽")
+        else:
+            st.info("Заказов пока нет.")
 
     # ======================================================
-    # 📋 СПИСОК
-    # ======================================================
-    elif choice == "Список заказов":
-        st.title("📋 Все заказы")
-        resp = supabase.table("orders").select("*").execute()
-        if resp.data:
-            st.dataframe(pd.DataFrame(resp.data), use_container_width=True)
-
-    # ======================================================
-    # ➕ ДОБАВИТЬ
+    # ➕ ДОБАВИТЬ ЗАКАЗ
     # ======================================================
     elif choice == "Добавить заказ":
-        st.title("➕ Новый заказ")
+        st.title("🆕 Новый заказ")
+        users_resp = supabase.table("users").select("*").execute()
+        user_dict = {u["full_name"]: u["id"] for u in users_resp.data} if users_resp.data else {}
 
-        with st.form("new_order"):
-            name = st.text_input("Клиент")
-            price = st.number_input("Сумма", min_value=0.0)
-            if st.form_submit_button("Создать"):
+        with st.form("new_order_form"):
+            name = st.text_input("ФИО Клиента")
+            phone = st.text_input("Телефон")
+            address = st.text_area("Адрес")
+            o_type = st.selectbox("Тип мебели", ["Кухня", "Шкаф", "Гардеробная", "Другое"])
+            price = st.number_input("Сумма", min_value=0)
+            responsible_name = st.selectbox("Ответственный", list(user_dict.keys()))
+            
+            if st.form_submit_button("Создать заказ"):
                 supabase.table("orders").insert({
-                    "client_name": name,
-                    "total_price": price,
-                    "paid_amount": 0,
-                    "status": "Лид"
+                    "client_name": name, "phone": phone, "address": address,
+                    "order_type": o_type, "total_price": price, "paid_amount": 0,
+                    "status": "Лид", "responsible_id": user_dict[responsible_name]
                 }).execute()
-                st.success("Создано")
+                st.success("Заказ создан!")
                 st.rerun()
 
     # ======================================================
-    # 📝 КАРТОЧКА
+    # 📝 КАРТОЧКА ПРОЕКТА
     # ======================================================
     elif choice == "Карточка проекта":
-        st.title("📝 Карточка проекта")
-
-        resp = supabase.table("orders").select("*").execute()
+        st.title("🔎 Управление заказом")
+        resp = supabase.table("orders").select("id, client_name").execute()
 
         if resp.data:
-            options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
-            selected = st.selectbox("Выберите", list(options.keys()))
-            sel_id = options[selected]
+            order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
+            selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
+            sel_id = order_options[selected_order]
 
-            order = supabase.table("orders").select("*").eq("id", sel_id).single().execute().data
+            order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
 
-            total = float(order["total_price"])
-            paid = float(order["paid_amount"])
-            debt = total - paid
-
+            # Метрики как в вашем дизайне
             c1, c2, c3 = st.columns(3)
-            c1.metric("Общая сумма", f"{total:,.0f} ₽")
-            c2.metric("Оплачено", f"{paid:,.0f} ₽")
-            c3.metric("Остаток", f"{debt:,.0f} ₽")
+            c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
+            c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
+            c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
 
-            st.divider()
+            tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
 
-            tabs = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
-
-            with tabs[1]:
-                with st.form("add_pay"):
-                    amount = st.number_input("Сумма", min_value=0.0)
-                    comment = st.text_input("Комментарий")
-                    if st.form_submit_button("Добавить"):
-                        supabase.table("payments").insert({
-                            "order_id": sel_id,
-                            "amount": amount,
-                            "comment": comment,
-                            "payment_date": datetime.now().isoformat()
-                        }).execute()
-
+            with tab_info:
+                users_resp = supabase.table("users").select("*").execute()
+                u_dict = {u["full_name"]: u["id"] for u in users_resp.data}
+                
+                with st.form("edit_form"):
+                    col1, col2 = st.columns(2)
+                    u_phone = col1.text_input("Телефон", value=order.get("phone", ""))
+                    u_address = col1.text_area("Адрес", value=order.get("address", ""))
+                    statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
+                    u_status = col2.selectbox("Статус", statuses, index=statuses.index(order.get("status")))
+                    u_resp_name = col2.selectbox("Ответственный", list(u_dict.keys()), 
+                                                 index=list(u_dict.values()).index(order.get("responsible_id")) if order.get("responsible_id") in u_dict.values() else 0)
+                    u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
+                    
+                    if st.form_submit_button("💾 Сохранить изменения"):
                         supabase.table("orders").update({
-                            "paid_amount": paid + amount
+                            "phone": u_phone, "address": u_address, "status": u_status,
+                            "responsible_id": u_dict[u_resp_name], "comment": u_comment
                         }).eq("id", sel_id).execute()
-
+                        st.success("Обновлено!")
                         st.rerun()
 
-                pay_resp = supabase.table("payments").select("*").eq("order_id", sel_id).execute()
+            with tab_pay:
+                st.subheader("💰 Добавить оплату")
+                with st.form("finance_form"):
+                    p_col1, p_col2 = st.columns(2)
+                    new_pay = p_col1.number_input("Сумма (₽)", min_value=0.0)
+                    new_comm = p_col2.text_input("Комментарий (н-р, 'Аванс')")
+                    if st.form_submit_button("✅ Зафиксировать платёж"):
+                        if new_pay > 0:
+                            supabase.table("payments").insert({"order_id": sel_id, "amount": new_pay, "comment": new_comm}).execute()
+                            new_total = float(order['paid_amount']) + new_pay
+                            supabase.table("orders").update({"paid_amount": new_total}).eq("id", sel_id).execute()
+                            st.success("Платёж учтён!")
+                            st.rerun()
+                
+                st.divider()
+                st.write("### 📜 История оплат")
+                pay_resp = supabase.table("payments").select("*").eq("order_id", sel_id).order("payment_date", desc=True).execute()
                 if pay_resp.data:
-                    st.dataframe(pd.DataFrame(pay_resp.data))
+                    pay_df = pd.DataFrame(pay_resp.data)
+                    pay_df['Дата'] = pd.to_datetime(pay_df['payment_date']).dt.strftime('%d.%m.%Y %H:%M')
+                    st.table(pay_df[['Дата', 'amount', 'comment']].rename(columns={'amount': 'Сумма', 'comment': 'Инфо'}))
+
+            with tab_files:
+                st.subheader("📁 Документы")
+                up_file = st.file_uploader("Загрузить файл", type=['png', 'jpg', 'pdf'])
+                if st.button("🚀 Загрузить"):
+                    if up_file:
+                        path = f"{sel_id}/{up_file.name}"
+                        supabase.storage.from_(BUCKET_NAME).upload(path, up_file.getvalue())
+                        st.success("Файл загружен!")
+                        st.rerun()
+                
+                files = supabase.storage.from_(BUCKET_NAME).list(str(sel_id))
+                for f in files:
+                    if f['name'] != '.emptyFolderPlaceholder':
+                        url_f = supabase.storage.from_(BUCKET_NAME).get_public_url(f"{sel_id}/{f['name']}")
+                        st.markdown(f"📄 [{f['name']}]({url_f})")
 
     # ======================================================
     # 📊 АНАЛИТИКА
     # ======================================================
-    elif choice == "Аналитика":
-        st.title("📊 Финансы")
+    elif choice == "Аналитика" and st.session_state.role == "admin":
+        st.title("📊 Финансовый отчет")
         resp = supabase.table("orders").select("*").execute()
         if resp.data:
             df = pd.DataFrame(resp.data)
-            st.metric("Оборот", f"{df['total_price'].sum():,.0f} ₽")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Оборот", f"{df['total_price'].sum():,.0f} ₽")
+            c2.metric("Касса", f"{df['paid_amount'].sum():,.0f} ₽")
+            c3.metric("В долгах", f"{(df['total_price'] - df['paid_amount']).sum():,.0f} ₽")
+            st.bar_chart(df["status"].value_counts())
 
     if st.sidebar.button("🚪 Выйти"):
         st.session_state.auth = False
