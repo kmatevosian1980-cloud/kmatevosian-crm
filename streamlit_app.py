@@ -9,8 +9,6 @@ url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-BUCKET_NAME = "furniture_files"
-
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
 # ==============================
@@ -206,7 +204,7 @@ if check_password():
             sel_id = order_options[selected_order]
 
             order = supabase.table("orders") \
-                .select("*, users(full_name)") \
+                .select("*") \
                 .eq("id", sel_id).single().execute().data
 
             total = float(order.get("total_price", 0))
@@ -216,6 +214,7 @@ if check_password():
             st.markdown(f"### {order['client_name']}")
             st.divider()
 
+            # KPI
             c1, c2, c3 = st.columns(3)
             c1.metric("Сумма договора", f"{total:,.0f} ₽")
             c2.metric("Оплачено", f"{paid:,.0f} ₽")
@@ -223,48 +222,38 @@ if check_password():
 
             st.divider()
 
-            # ✏ Изменить сумму договора
-            st.markdown("### ✏ Изменить сумму договора")
-            new_total = st.number_input("Новая сумма договора", value=total, min_value=0.0)
+            # ОДНА форма для финансов
+            with st.form("finance_form"):
 
-            if st.button("Сохранить сумму договора"):
-                supabase.table("orders").update({
-                    "total_price": new_total
-                }).eq("id", sel_id).execute()
+                col1, col2 = st.columns(2)
 
-                st.success("Сумма договора обновлена")
-                st.rerun()
+                with col1:
+                    new_total = st.number_input(
+                        "Сумма договора",
+                        value=total,
+                        min_value=0.0
+                    )
 
-            st.divider()
+                with col2:
+                    payment_add = st.number_input(
+                        "Добавить оплату",
+                        min_value=0.0,
+                        step=1000.0
+                    )
 
-            # ➕ Внести оплату
-            st.markdown("### ➕ Внести оплату")
+                submit_finance = st.form_submit_button("Сохранить изменения")
 
-            col_pay1, col_pay2 = st.columns([2, 1])
+                if submit_finance:
 
-            with col_pay1:
-                payment_amount = st.number_input(
-                    "Сумма доплаты",
-                    min_value=0.0,
-                    step=1000.0,
-                    format="%.2f"
-                )
+                    updated_paid = paid + payment_add
 
-            with col_pay2:
-                if st.button("Добавить оплату"):
-                    if payment_amount > 0:
-                        new_paid = paid + payment_amount
+                    supabase.table("orders").update({
+                        "total_price": new_total,
+                        "paid_amount": updated_paid
+                    }).eq("id", sel_id).execute()
 
-                        supabase.table("orders").update({
-                            "paid_amount": new_paid
-                        }).eq("id", sel_id).execute()
-
-                        st.success(f"Добавлена оплата {payment_amount:,.0f} ₽")
-                        st.rerun()
-                    else:
-                        st.warning("Введите сумму больше 0")
-
-            st.divider()
+                    st.success("Финансы обновлены")
+                    st.rerun()
 
     # ======================================================
     # 📊 АНАЛИТИКА
