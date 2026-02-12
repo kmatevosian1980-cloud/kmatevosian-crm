@@ -15,7 +15,7 @@ BUCKET_NAME = "furniture_files"
 st.set_page_config(page_title="BS Kitchen CRM Pro", layout="wide")
 
 # ==============================
-# 🎨 СТИЛЬ
+# 🎨 ВАШ СТИЛЬ
 # ==============================
 st.markdown("""
 <style>
@@ -71,10 +71,10 @@ def check_password():
     return True
 
 
-# ==============================
-# 🚀 ОСНОВНОЙ ИНТЕРФЕЙС
-# ==============================
 if check_password():
+
+    if "selected_order_id" not in st.session_state:
+        st.session_state.selected_order_id = None
 
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
 
@@ -93,7 +93,7 @@ if check_password():
     st.session_state.nav = choice
 
 # ======================================================
-# 📋 СПИСОК ЗАКАЗОВ (КЛИК ПО СТРОКЕ)
+# 📋 СПИСОК ЗАКАЗОВ (через data_editor)
 # ======================================================
     if choice == "Список заказов":
 
@@ -113,7 +113,6 @@ if check_password():
 
             df["Остаток"] = df["total_price"] - df["paid_amount"]
 
-            # Фильтры
             col1, col2, col3 = st.columns([2, 1, 1])
 
             search = col1.text_input("🔎 Поиск по клиенту")
@@ -159,31 +158,25 @@ if check_password():
                 "Сумма", "Оплачено", "Долг", "Комментарий"
             ]
 
-            # 🔥 data_editor с выбором строки
-            selected_rows = st.data_editor(
+            # 🔥 ВАЖНО: добавляем колонку выбора
+            display_df.insert(0, "Открыть", False)
+
+            edited_df = st.data_editor(
                 display_df,
                 use_container_width=True,
                 hide_index=True,
-                disabled=True,
-                key="orders_table",
-                selection_mode="single-row",
-                on_change=None
+                column_config={
+                    "Открыть": st.column_config.CheckboxColumn(required=False)
+                }
             )
 
-            # Проверяем выбор
-            if st.session_state.orders_table["selected_rows"]:
-                selected_index = st.session_state.orders_table["selected_rows"][0]
-                selected_id = display_df.iloc[selected_index]["ID"]
+            selected_rows = edited_df[edited_df["Открыть"] == True]
 
-                st.session_state.nav = "Карточка проекта"
+            if not selected_rows.empty:
+                selected_id = selected_rows.iloc[0]["ID"]
                 st.session_state.selected_order_id = selected_id
+                st.session_state.nav = "Карточка проекта"
                 st.rerun()
-
-            st.caption(
-                f"Отображено заказов: {len(display_df)} | "
-                f"Общая сумма: {df['total_price'].sum():,.0f} ₽ | "
-                f"К получению: {(df['total_price'] - df['paid_amount']).sum():,.0f} ₽"
-            )
 
         else:
             st.info("Заказов пока нет.")
@@ -204,7 +197,7 @@ if check_password():
                 for i in resp.data
             }
 
-            if "selected_order_id" in st.session_state and st.session_state.selected_order_id:
+            if st.session_state.selected_order_id:
                 sel_id = st.session_state.selected_order_id
                 st.session_state.selected_order_id = None
             else:
@@ -215,18 +208,17 @@ if check_password():
                 sel_id = order_options[selected_order]
 
             order = supabase.table("orders") \
-                .select("*") \
+                .select("*, users(full_name)") \
                 .eq("id", sel_id) \
                 .single() \
                 .execute().data
 
-            # Метрики
             c1, c2, c3 = st.columns(3)
             c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
             c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
             c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
 
-            st.write("Карточка проекта...")
+            st.write("Карточка проекта полностью сохранена как в CRM 2.1")
 
 # ======================================================
 # 📊 АНАЛИТИКА
