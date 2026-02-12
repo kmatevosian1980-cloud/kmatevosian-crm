@@ -72,11 +72,6 @@ def check_password():
 
 if check_password():
 
-    if "selected_order_id" not in st.session_state:
-        st.session_state.selected_order_id = None
-
-    if "go_to_card" not in st.session_state:
-        st.session_state.go_to_card = False
     st.sidebar.title(f"👤 {st.session_state.role.upper()}")
     menu = ["Список заказов", "Добавить заказ", "Карточка проекта"]
     if st.session_state.role == "admin":
@@ -145,35 +140,7 @@ if check_password():
 
             # Вывод таблицы
             st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-            st.divider()
-            st.write("### Выберите заказ для открытия")
-
-            selected_id = st.radio(
-                "",
-                display_df["ID"],
-                format_func=lambda x: f"#{x} — {display_df[display_df['ID']==x]['Клиент'].values[0]}"
-            )
-
-            if selected_id:
-                st.session_state.selected_order_id = selected_id
-                choice = "Карточка проекта"
-
             
-            selected_rows = st.session_state.get("orders_editor", {}).get("selected_rows", [])
-
-            if "orders_editor" in st.session_state:
-                selected = st.session_state.orders_editor.get("selection", {})
-                rows = selected.get("rows", [])
-
-                if rows:
-                    selected_index = rows[0]
-                    selected_id = display_df.iloc[selected_index]["ID"]
-
-                    st.session_state.selected_order_id = selected_id
-                    st.session_state.go_to_card = True
-                    st.rerun()
-
             # Итоговая плашка
             st.caption(
                 f"Отображено заказов: {len(display_df)} | "
@@ -187,14 +154,6 @@ if check_password():
     # ======================================================
     elif choice == "Добавить заказ":
         st.title("🆕 Новый заказ")
-        if st.session_state.selected_order_id:
-            sel_id = st.session_state.selected_order_id
-        else:
-            resp = supabase.table("orders").select("id, client_name").execute()
-            order_options = {f"{i['client_name']} (ID:{i['id']})": i["id"] for i in resp.data}
-            selected_order = st.selectbox("Выберите клиента", list(order_options.keys()))
-            sel_id = order_options[selected_order]
-
         users_resp = supabase.table("users").select("*").execute()
         user_dict = {u["full_name"]: u["id"] for u in users_resp.data} if users_resp.data else {}
 
@@ -238,57 +197,26 @@ if check_password():
             tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
 
             with tab_info:
-
-                order = supabase.table("orders").select("*, users(full_name)").eq("id", sel_id).single().execute().data
-
-            # Метрики как в вашем дизайне
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Общая сумма", f"{order['total_price']:,.0f} ₽")
-            c2.metric("Оплачено", f"{order['paid_amount']:,.0f} ₽")
-            c3.metric("Остаток", f"{order['total_price'] - order['paid_amount']:,.0f} ₽")
-
-            # Вкладки
-            tab_info, tab_pay, tab_files = st.tabs(["📝 Информация", "💰 История платежей", "📂 Файлы"])
-
-            # =========================
-            # TAB 1 — ИНФОРМАЦИЯ
-            # =========================
-            with tab_info:
                 users_resp = supabase.table("users").select("*").execute()
                 u_dict = {u["full_name"]: u["id"] for u in users_resp.data}
-
+                
                 with st.form("edit_form"):
                     col1, col2 = st.columns(2)
-
                     u_phone = col1.text_input("Телефон", value=order.get("phone", ""))
                     u_address = col1.text_area("Адрес", value=order.get("address", ""))
-
                     statuses = ["Лид", "Замер", "Проект", "Договор/Аванс", "Производство", "Монтаж", "Завершено"]
-                    u_status = col2.selectbox(
-                        "Статус",
-                        statuses,
-                        index=statuses.index(order.get("status"))
-                    )
-
-                    u_resp_name = col2.selectbox(
-                        "Ответственный",
-                         list(u_dict.keys()),
-                         index=list(u_dict.values()).index(order.get("responsible_id"))
-                         if order.get("responsible_id") in u_dict.values() else 0
-                    )
-
+                    u_status = col2.selectbox("Статус", statuses, index=statuses.index(order.get("status")))
+                    u_resp_name = col2.selectbox("Ответственный", list(u_dict.keys()), 
+                                                 index=list(u_dict.values()).index(order.get("responsible_id")) if order.get("responsible_id") in u_dict.values() else 0)
                     u_comment = st.text_area("Комментарий", value=order.get("comment", ""))
-
+                    
                     if st.form_submit_button("💾 Сохранить изменения"):
                         supabase.table("orders").update({
-                            "phone": u_phone,
-                            "address": u_address,
-                            "status": u_status,
-                            "responsible_id": u_dict[u_resp_name],
-                            "comment": u_comment
-                    }).eq("id", sel_id).execute()
-                    st.success("Обновлено!")
-                    st.rerun()
+                            "phone": u_phone, "address": u_address, "status": u_status,
+                            "responsible_id": u_dict[u_resp_name], "comment": u_comment
+                        }).eq("id", sel_id).execute()
+                        st.success("Обновлено!")
+                        st.rerun()
 
             with tab_pay:
                 st.subheader("💰 Добавить оплату")
